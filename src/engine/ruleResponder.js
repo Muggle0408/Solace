@@ -45,6 +45,14 @@ function generateResponse(message, stage) {
       };
 
     case 'rebuild':
+      if (lowerMsg.includes('直接结束') || lowerMsg.includes('跳过') || lowerMsg.includes('不做')) {
+        return {
+          stage: 'closing',
+          type: 'text',
+          text: '没关系，我们就这样说说话也很好。重要的是，你已经走完了从情绪突袭到重新看见自己的一小段路。',
+          options: []
+        };
+      }
       return {
         stage: 'regulation',
         type: 'text',

@@ -5,9 +5,10 @@ const sendBtn = document.getElementById('sendBtn');
 const crisisBanner = document.getElementById('crisisBanner');
 const crisisNumbers = document.getElementById('crisisNumbers');
 
-let currentStage = 'welcome';
 let startRating = null;
 let endRating = null;
+let history = []; // 对话历史，后端从中恢复当前阶段
+
 let sessionRecord = {
   id: Date.now(),
   date: new Date().toISOString(),
@@ -21,7 +22,16 @@ const HOTLINES = [
   { name: '生命热线', number: '400-821-1215' }
 ];
 
-function addMessage(text, sender) {
+function getCurrentStage() {
+  for (let i = history.length - 1; i >= 0; i--) {
+    if (history[i].role === 'bot' && history[i].stage) {
+      return history[i].stage;
+    }
+  }
+  return 'welcome';
+}
+
+function addMessage(text, sender, stage = null) {
   const msgDiv = document.createElement('div');
   msgDiv.className = `message ${sender}`;
   const bubble = document.createElement('div');
@@ -30,6 +40,11 @@ function addMessage(text, sender) {
   msgDiv.appendChild(bubble);
   chatContainer.appendChild(msgDiv);
   chatContainer.scrollTop = chatContainer.scrollHeight;
+
+  // 同时更新对话历史和后端会话记录
+  const record = { role: sender, content: text, time: new Date().toISOString() };
+  if (stage) record.stage = stage;
+  history.push(record);
 
   sessionRecord.messages.push({ sender, text, time: new Date().toISOString() });
 }
@@ -63,36 +78,34 @@ function showCrisisBanner() {
 async function handleUserMessage(text) {
   if (!text.trim()) return;
 
-  addMessage(text, 'user');
-  userInput.value = '';
+  const currentStage = getCurrentStage();
 
-  // 记录开始情绪评分
+  // 记录开始/结束情绪评分
   if (currentStage === 'welcome' && startRating === null) {
     const ratingMatch = text.match(/(\d+)/);
     if (ratingMatch) startRating = parseInt(ratingMatch[1], 10);
   }
-
-  // 记录结束情绪评分
   if (currentStage === 'closing' && endRating === null) {
     const ratingMatch = text.match(/(\d+)/);
     if (ratingMatch) endRating = parseInt(ratingMatch[1], 10);
   }
 
+  addMessage(text, 'user');
+  userInput.value = '';
+
   try {
     const res = await fetch('/api/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message: text, stage: currentStage })
+      body: JSON.stringify({ message: text, history })
     });
     const data = await res.json();
-
-    currentStage = data.stage;
 
     if (data.type === 'crisis') {
       showCrisisBanner();
     }
 
-    addMessage(data.text, 'bot');
+    addMessage(data.text, 'bot', data.stage);
     renderOptions(data.options);
 
     if (data.stage === 'end') {
@@ -114,11 +127,10 @@ function saveSession() {
     sessionRecord.insight = sessionRecord.messages[rebuildIdx + 1].text;
   }
 
-  const history = JSON.parse(localStorage.getItem('emotion_history') || '[]');
-  history.push(sessionRecord);
-  // 只保留最近 30 条
-  if (history.length > 30) history.shift();
-  localStorage.setItem('emotion_history', JSON.stringify(history));
+  const stored = JSON.parse(localStorage.getItem('emotion_history') || '[]');
+  stored.push(sessionRecord);
+  if (stored.length > 30) stored.shift();
+  localStorage.setItem('emotion_history', JSON.stringify(stored));
 
   addSystemNote('本次记录已保存到本地。');
 }

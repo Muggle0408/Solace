@@ -4,6 +4,7 @@ const request = require('supertest');
 const { app } = require('../server');
 const { detectCrisis } = require('../src/services/crisisDetector');
 const ruleResponder = require('../src/engine/ruleResponder');
+const { getCurrentStage, isValidTransition } = require('../src/config/stages');
 
 describe('健康检查', () => {
   it('GET /api/health 返回服务状态', async () => {
@@ -37,11 +38,35 @@ describe('危机识别', () => {
   });
 });
 
+describe('阶段工具函数', () => {
+  it('从 history 恢复当前 stage', () => {
+    const history = [
+      { role: 'bot', content: '你好', stage: 'welcome' },
+      { role: 'user', content: '焦虑' },
+      { role: 'bot', content: '谢谢', stage: 'check_in' }
+    ];
+    assert.strictEqual(getCurrentStage(history), 'check_in');
+  });
+
+  it('空 history 返回 welcome', () => {
+    assert.strictEqual(getCurrentStage([]), 'welcome');
+  });
+
+  it('合法跳转校验', () => {
+    assert.strictEqual(isValidTransition('welcome', 'check_in'), true);
+    assert.strictEqual(isValidTransition('welcome', 'safety'), false);
+  });
+
+  it('用户拒绝时不推进', () => {
+    assert.strictEqual(isValidTransition('rebuild', 'regulation', '我不想做'), false);
+  });
+});
+
 describe('对话流程', () => {
   it('welcome 阶段返回初始问候', async () => {
     const res = await request(app)
       .post('/api/chat')
-      .send({ message: '', stage: 'welcome' })
+      .send({ message: '', history: [] })
       .expect(200);
 
     assert.strictEqual(res.body.stage, 'check_in');
@@ -52,7 +77,7 @@ describe('对话流程', () => {
   it('危机输入直接触发 crisis 阶段', async () => {
     const res = await request(app)
       .post('/api/chat')
-      .send({ message: '我想自杀', stage: 'check_in' })
+      .send({ message: '我想自杀', history: [] })
       .expect(200);
 
     assert.strictEqual(res.body.stage, 'crisis');
@@ -61,22 +86,49 @@ describe('对话流程', () => {
   });
 
   it('完整流程从 welcome 推进到 closing', async () => {
-    const stages = [
-      { stage: 'welcome', msg: '焦虑', expected: 'check_in' },
-      { stage: 'check_in', msg: '胸口发紧', expected: 'safety' },
-      { stage: 'safety', msg: '我觉得一切都完了', expected: 'awareness' },
-      { stage: 'awareness', msg: '好像有', expected: 'socratic' },
-      { stage: 'socratic', msg: 'Ta 可能会说我太苛责自己了', expected: 'rebuild' },
-      { stage: 'rebuild', msg: '做呼吸练习', expected: 'regulation' },
-      { stage: 'regulation', msg: '完成了，感觉平静一些', expected: 'closing' }
+    const steps = [
+      { msg: '焦虑', history: [], expected: 'check_in' },
+      { msg: '胸口发紧', history: [
+        { role: 'bot', content: '...', stage: 'check_in' }
+      ], expected: 'safety' },
+      { msg: '我觉得一切都完了', history: [
+        { role: 'bot', content: '...', stage: 'check_in' },
+        { role: 'bot', content: '...', stage: 'safety' }
+      ], expected: 'awareness' },
+      { msg: '好像有', history: [
+        { role: 'bot', content: '...', stage: 'check_in' },
+        { role: 'bot', content: '...', stage: 'safety' },
+        { role: 'bot', content: '...', stage: 'awareness' }
+      ], expected: 'socratic' },
+      { msg: 'Ta 可能会说我太苛责自己了', history: [
+        { role: 'bot', content: '...', stage: 'check_in' },
+        { role: 'bot', content: '...', stage: 'safety' },
+        { role: 'bot', content: '...', stage: 'awareness' },
+        { role: 'bot', content: '...', stage: 'socratic' }
+      ], expected: 'rebuild' },
+      { msg: '做呼吸练习', history: [
+        { role: 'bot', content: '...', stage: 'check_in' },
+        { role: 'bot', content: '...', stage: 'safety' },
+        { role: 'bot', content: '...', stage: 'awareness' },
+        { role: 'bot', content: '...', stage: 'socratic' },
+        { role: 'bot', content: '...', stage: 'rebuild' }
+      ], expected: 'regulation' },
+      { msg: '完成了，感觉平静一些', history: [
+        { role: 'bot', content: '...', stage: 'check_in' },
+        { role: 'bot', content: '...', stage: 'safety' },
+        { role: 'bot', content: '...', stage: 'awareness' },
+        { role: 'bot', content: '...', stage: 'socratic' },
+        { role: 'bot', content: '...', stage: 'rebuild' },
+        { role: 'bot', content: '...', stage: 'regulation' }
+      ], expected: 'closing' }
     ];
 
-    for (const step of stages) {
+    for (const step of steps) {
       const res = await request(app)
         .post('/api/chat')
-        .send({ message: step.msg, stage: step.stage })
+        .send({ message: step.msg, history: step.history })
         .expect(200);
-      assert.strictEqual(res.body.stage, step.expected, `阶段 ${step.stage} 应跳转到 ${step.expected}`);
+      assert.strictEqual(res.body.stage, step.expected, `消息 "${step.msg}" 应跳转到 ${step.expected}`);
     }
   });
 });
