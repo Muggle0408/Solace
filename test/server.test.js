@@ -1,7 +1,9 @@
 const { describe, it } = require('node:test');
 const assert = require('node:assert');
 const request = require('supertest');
-const { app, detectCrisis, generateRuleBasedResponse } = require('../server');
+const { app } = require('../server');
+const { detectCrisis } = require('../src/services/crisisDetector');
+const ruleResponder = require('../src/engine/ruleResponder');
 
 describe('健康检查', () => {
   it('GET /api/health 返回服务状态', async () => {
@@ -76,5 +78,14 @@ describe('对话流程', () => {
         .expect(200);
       assert.strictEqual(res.body.stage, step.expected, `阶段 ${step.stage} 应跳转到 ${step.expected}`);
     }
+  });
+});
+
+describe('规则响应器', () => {
+  it('生成危机响应包含热线信息', () => {
+    const res = ruleResponder.generateCrisisResponse();
+    assert.strictEqual(res.stage, 'crisis');
+    assert.strictEqual(res.isCrisis, true);
+    assert.ok(res.text.includes('全国 24 小时心理援助热线'));
   });
 });
