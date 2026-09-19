@@ -238,7 +238,7 @@ function parseJSON(content) {
 }
 
 // 校验响应是否合法
-function validateResponse(response, currentStage) {
+function validateResponse(response, currentStage, message = '') {
   if (!response || typeof response !== 'object') {
     throw new Error('响应不是有效对象');
   }
@@ -250,8 +250,8 @@ function validateResponse(response, currentStage) {
     }
   }
 
-  // 允许停留当前阶段，也允许合法推进
-  if (response.stage !== currentStage && !isValidTransition(currentStage, response.stage, response.text)) {
+  // 允许停留当前阶段，也允许合法推进；使用用户原始输入判断拒绝词
+  if (response.stage !== currentStage && !isValidTransition(currentStage, response.stage, message)) {
     throw new Error(`非法阶段跳转: ${currentStage} -> ${response.stage}`);
   }
 
@@ -269,7 +269,7 @@ async function generateResponse(message, currentStage, history = []) {
   ]);
 
   const response = parseJSON(rawContent);
-  return validateResponse(response, currentStage);
+  return validateResponse(response, currentStage, safeMessage);
 }
 
 module.exports = { generateResponse, buildPrompt };
