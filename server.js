@@ -1,3 +1,8 @@
+// 如果环境变量未加载，则从 .env 文件加载
+if (!process.env.KIMI_API_KEY) {
+  require('dotenv').config();
+}
+
 const express = require('express');
 const path = require('path');
 const chatRoutes = require('./src/routes/chat');

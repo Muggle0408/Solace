@@ -1,3 +1,6 @@
+// 测试默认关闭大模型调用，避免真实 API 请求带来的延迟和费用
+process.env.USE_LLM = 'false';
+
 const { describe, it } = require('node:test');
 const assert = require('node:assert');
 const request = require('supertest');
