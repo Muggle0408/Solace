@@ -8,6 +8,7 @@ const crisisNumbers = document.getElementById('crisisNumbers');
 let startRating = null;
 let endRating = null;
 let history = []; // 对话历史，后端从中恢复当前阶段
+let isProcessing = false; // 防止重复提交
 
 let sessionRecord = {
   id: Date.now(),
@@ -76,7 +77,8 @@ function showCrisisBanner() {
 }
 
 async function handleUserMessage(text) {
-  if (!text.trim()) return;
+  if (!text.trim() || isProcessing) return;
+  isProcessing = true;
 
   const currentStage = getCurrentStage();
 
@@ -114,6 +116,8 @@ async function handleUserMessage(text) {
   } catch (err) {
     addMessage('抱歉，发生了一些错误，请稍后再试。', 'bot');
     console.error(err);
+  } finally {
+    isProcessing = false;
   }
 }
 

@@ -10,10 +10,12 @@ const ruleResponder = require('../src/engine/ruleResponder');
 const { getCurrentStage, isValidTransition } = require('../src/config/stages');
 
 describe('健康检查', () => {
-  it('GET /api/health 返回服务状态', async () => {
+  it('GET /api/health 返回服务状态和 LLM 模式', async () => {
     const res = await request(app).get('/api/health').expect(200);
     assert.strictEqual(res.body.status, 'ok');
     assert.strictEqual(res.body.version, '0.1.0');
+    assert.strictEqual(res.body.llmEnabled, false);
+    assert.ok(res.body.model);
   });
 });
 
