@@ -15,6 +15,7 @@ describe('健康检查', () => {
     assert.strictEqual(res.body.status, 'ok');
     assert.strictEqual(res.body.version, '0.1.0');
     assert.strictEqual(res.body.llmEnabled, false);
+    assert.ok(res.body.provider);
     assert.ok(res.body.model);
   });
 });

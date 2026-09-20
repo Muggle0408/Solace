@@ -4,6 +4,7 @@ require('dotenv').config();
 const express = require('express');
 const path = require('path');
 const chatRoutes = require('./src/routes/chat');
+const { LLM_PROVIDER } = require('./src/services/llmClient');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -18,7 +19,10 @@ app.get('/api/health', (req, res) => {
     status: 'ok',
     version: '0.1.0',
     llmEnabled: USE_LLM,
-    model: process.env.KIMI_MODEL || 'none'
+    provider: LLM_PROVIDER,
+    model: LLM_PROVIDER === 'deepseek'
+      ? (process.env.DEEPSEEK_MODEL || 'deepseek-chat')
+      : (process.env.KIMI_MODEL || 'none')
   });
 });
 
