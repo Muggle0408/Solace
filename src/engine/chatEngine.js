@@ -19,11 +19,14 @@ async function processMessage(message, history = []) {
     try {
       const response = await llmResponder.generateResponse(message, currentStage, history);
       if (isValidTransition(currentStage, response.stage, message)) {
+        console.log(`[LLM] ${currentStage} -> ${response.stage} | 用户: ${message.slice(0, 30)}`);
         return response;
       }
-      console.warn(`非法阶段跳转: ${currentStage} -> ${response.stage}，回退规则引擎`);
+      console.warn(`[LLM->规则] 非法阶段跳转: ${currentStage} -> ${response.stage} | 用户: ${message.slice(0, 30)}`);
+      console.warn(`[LLM->规则] 模型原文: ${response.text.slice(0, 100)}`);
     } catch (err) {
-      console.warn('LLM 响应失败，回退到规则引擎:', err.message);
+      console.warn('[LLM->规则] LLM 响应失败，回退到规则引擎:', err.message);
+      console.warn('[LLM->规则] 用户输入:', message.slice(0, 50));
     }
   }
 
