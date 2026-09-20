@@ -60,6 +60,7 @@ describe('阶段工具函数', () => {
   it('合法跳转校验', () => {
     assert.strictEqual(isValidTransition('welcome', 'check_in'), true);
     assert.strictEqual(isValidTransition('welcome', 'safety'), false);
+    assert.strictEqual(isValidTransition('check_in', 'check_in'), true);
   });
 
   it('用户拒绝时不推进', () => {

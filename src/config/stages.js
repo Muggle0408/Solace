@@ -60,6 +60,10 @@ const VALID_TRANSITIONS = {
 // 判断阶段跳转是否合法
 function isValidTransition(currentStage, nextStage, message = '') {
   if (!currentStage || !nextStage) return false;
+
+  // 允许大模型选择停留在当前阶段
+  if (currentStage === nextStage) return true;
+
   const allowed = VALID_TRANSITIONS[currentStage] || [];
   if (!allowed.includes(nextStage)) return false;
 
