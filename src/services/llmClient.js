@@ -41,15 +41,15 @@ async function chatCompletion(messages, options = {}) {
   const response = await fetch(`${config.baseUrl}/chat/completions`, {
     method: 'POST',
     headers: {
-      'Content-Type': 'application/json',
+      'Content-Type': 'application/json; charset=utf-8',
       'Authorization': `Bearer ${config.apiKey}`
     },
-    body: JSON.stringify({
+    body: Buffer.from(JSON.stringify({
       model: config.model,
       messages,
       max_tokens: options.max_tokens ?? 2000,
       ...options
-    })
+    }), 'utf-8')
   });
 
   if (!response.ok) {
