@@ -1,3 +1,5 @@
+const axios = require('axios');
+
 const LLM_PROVIDER = process.env.LLM_PROVIDER || 'kimi';
 
 const PROVIDERS = {
@@ -38,33 +40,40 @@ async function chatCompletion(messages, options = {}) {
     throw new Error(`${LLM_PROVIDER === 'kimi' ? 'KIMI_API_KEY' : 'DEEPSEEK_API_KEY'} 未配置`);
   }
 
-  const response = await fetch(`${config.baseUrl}/chat/completions`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json; charset=utf-8',
-      'Authorization': `Bearer ${config.apiKey}`
-    },
-    body: Buffer.from(JSON.stringify({
-      model: config.model,
-      messages,
-      max_tokens: options.max_tokens ?? 2000,
-      ...options
-    }), 'utf-8')
-  });
+  try {
+    const response = await axios.post(
+      `${config.baseUrl}/chat/completions`,
+      {
+        model: config.model,
+        messages,
+        max_tokens: options.max_tokens ?? 2000,
+        ...options
+      },
+      {
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${config.apiKey}`
+        },
+        timeout: 60000
+      }
+    );
 
-  if (!response.ok) {
-    const errorText = await response.text();
-    throw new Error(`${LLM_PROVIDER} API 错误 (${response.status}): ${errorText}`);
+    const content = response.data.choices?.[0]?.message?.content;
+
+    if (!content) {
+      throw new Error(`${LLM_PROVIDER} API 返回内容为空`);
+    }
+
+    return content;
+  } catch (err) {
+    if (err.response) {
+      const errorData = typeof err.response.data === 'object'
+        ? JSON.stringify(err.response.data)
+        : String(err.response.data);
+      throw new Error(`${LLM_PROVIDER} API 错误 (${err.response.status}): ${errorData}`);
+    }
+    throw err;
   }
-
-  const data = await response.json();
-  const content = data.choices?.[0]?.message?.content;
-
-  if (!content) {
-    throw new Error(`${LLM_PROVIDER} API 返回内容为空`);
-  }
-
-  return content;
 }
 
 module.exports = { chatCompletion, LLM_PROVIDER };
