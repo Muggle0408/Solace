@@ -1,5 +1,7 @@
 // 测试默认关闭大模型调用，避免真实 API 请求带来的延迟和费用
 process.env.USE_LLM = 'false';
+// 关闭限流，避免高频测试请求被拦截
+process.env.RATE_LIMIT_MAX = '0';
 
 const { describe, it } = require('node:test');
 const assert = require('node:assert');
