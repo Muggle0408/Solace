@@ -2,6 +2,8 @@ const chatContainer = document.getElementById('chatContainer');
 const optionsContainer = document.getElementById('options');
 const userInput = document.getElementById('userInput');
 const sendBtn = document.getElementById('sendBtn');
+const micBtn = document.getElementById('micBtn');
+const voiceToggleBtn = document.getElementById('voiceToggleBtn');
 const crisisBanner = document.getElementById('crisisBanner');
 const crisisNumbers = document.getElementById('crisisNumbers');
 
@@ -39,6 +41,20 @@ function addMessage(text, sender, stage = null) {
   bubble.className = 'bubble';
   bubble.textContent = text;
   msgDiv.appendChild(bubble);
+
+  // AI 回复附带语音播报按钮
+  if (sender === 'bot') {
+    const ttsBtn = document.createElement('button');
+    ttsBtn.className = 'tts-btn';
+    ttsBtn.textContent = '🔊 朗读';
+    ttsBtn.title = '朗读这条回复';
+    ttsBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      toggleSpeak(text, ttsBtn);
+    });
+    msgDiv.appendChild(ttsBtn);
+  }
+
   chatContainer.appendChild(msgDiv);
   chatContainer.scrollTop = chatContainer.scrollHeight;
 
@@ -110,6 +126,9 @@ async function handleUserMessage(text) {
     addMessage(data.text, 'bot', data.stage);
     renderOptions(data.options);
 
+    // 开启自动朗读时，播报本轮 AI 回复
+    if (voiceOn) speak(data.text);
+
     if (data.stage === 'end') {
       saveSession();
     }
@@ -137,6 +156,116 @@ function saveSession() {
   localStorage.setItem('emotion_history', JSON.stringify(stored));
 
   addSystemNote('本次记录已保存到本地。');
+}
+
+// ---------- 语音能力：ASR 输入 + TTS 播报（浏览器原生，无额外依赖） ----------
+
+const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+let recognition = null;
+let recording = false;
+let voiceOn = false;
+let speakingBtn = null;
+
+// TTS：朗读文本；再次点击同一按钮停止
+function speak(text, btn = null) {
+  if (!('speechSynthesis' in window)) return;
+  speechSynthesis.cancel();
+  if (speakingBtn) speakingBtn.classList.remove('speaking');
+  speakingBtn = null;
+
+  const utter = new SpeechSynthesisUtterance(text);
+  utter.lang = 'zh-CN';
+  utter.rate = 0.95;
+  const zhVoice = speechSynthesis.getVoices().find(v => /zh|中文|Chinese/i.test(v.lang + v.name));
+  if (zhVoice) utter.voice = zhVoice;
+
+  if (btn) {
+    btn.classList.add('speaking');
+    speakingBtn = btn;
+    const done = () => btn.classList.remove('speaking');
+    utter.onend = done;
+    utter.onerror = done;
+  }
+  speechSynthesis.speak(utter);
+}
+
+function toggleSpeak(text, btn) {
+  if (!('speechSynthesis' in window)) {
+    addSystemNote('当前浏览器不支持语音播报，建议使用 Chrome / Edge。');
+    return;
+  }
+  const isSpeakingThis = speakingBtn === btn && speechSynthesis.speaking;
+  speak(text, btn);
+  if (isSpeakingThis) {
+    speechSynthesis.cancel();
+    btn.classList.remove('speaking');
+    speakingBtn = null;
+  }
+}
+
+// ASR：点击开始录音，转写结果填入输入框，用户确认后发送
+function setRecordingState(on) {
+  recording = on;
+  micBtn.classList.toggle('recording', on);
+  micBtn.textContent = on ? '■' : '🎤';
+  userInput.placeholder = on ? '正在聆听，请说话…' : '输入你想说的话...';
+}
+
+function startRecording() {
+  recognition = new SpeechRecognition();
+  recognition.lang = 'zh-CN';
+  recognition.interimResults = true;
+  recognition.continuous = false;
+
+  let finalTranscript = '';
+  recognition.onresult = (e) => {
+    let interim = '';
+    for (let i = e.resultIndex; i < e.results.length; i++) {
+      if (e.results[i].isFinal) finalTranscript += e.results[i][0].transcript;
+      else interim += e.results[i][0].transcript;
+    }
+    userInput.value = finalTranscript + interim;
+  };
+  recognition.onend = () => setRecordingState(false);
+  recognition.onerror = (e) => {
+    setRecordingState(false);
+    if (e.error === 'not-allowed') addSystemNote('麦克风权限被拒绝了，请在浏览器设置中允许后重试。');
+  };
+
+  setRecordingState(true);
+  recognition.start();
+}
+
+if (micBtn) {
+  if (!SpeechRecognition) {
+    micBtn.disabled = true;
+    micBtn.title = '当前浏览器不支持语音输入，建议使用 Chrome / Edge';
+  } else {
+    micBtn.addEventListener('click', () => {
+      if (recording) {
+        recognition && recognition.stop();
+      } else {
+        try { startRecording(); } catch (err) { setRecordingState(false); }
+      }
+    });
+  }
+}
+
+if (voiceToggleBtn) {
+  if (!('speechSynthesis' in window)) {
+    voiceToggleBtn.disabled = true;
+    voiceToggleBtn.title = '当前浏览器不支持语音播报';
+  } else {
+    voiceToggleBtn.addEventListener('click', () => {
+      voiceOn = !voiceOn;
+      voiceToggleBtn.classList.toggle('active', voiceOn);
+      voiceToggleBtn.title = voiceOn ? '已开启自动朗读（点击关闭）' : '自动朗读回复';
+      if (!voiceOn) {
+        speechSynthesis.cancel();
+        if (speakingBtn) speakingBtn.classList.remove('speaking');
+      }
+    });
+  }
 }
 
 sendBtn.addEventListener('click', () => handleUserMessage(userInput.value));
