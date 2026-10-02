@@ -24,3 +24,6 @@ Thumbs.db
 # IDE
 .vscode/
 .idea/
+
+# 运行时数据（反馈落盘文件，不入库）
+data/

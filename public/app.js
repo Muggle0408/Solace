@@ -42,8 +42,11 @@ function addMessage(text, sender, stage = null) {
   bubble.textContent = text;
   msgDiv.appendChild(bubble);
 
-  // AI 回复附带语音播报按钮
+  // AI 回复附带操作栏：朗读 + 满意度反馈
   if (sender === 'bot') {
+    const actions = document.createElement('div');
+    actions.className = 'msg-actions';
+
     const ttsBtn = document.createElement('button');
     ttsBtn.className = 'tts-btn';
     ttsBtn.textContent = '🔊 朗读';
@@ -52,7 +55,10 @@ function addMessage(text, sender, stage = null) {
       e.stopPropagation();
       toggleSpeak(text, ttsBtn);
     });
-    msgDiv.appendChild(ttsBtn);
+    actions.appendChild(ttsBtn);
+
+    actions.appendChild(buildFeedbackBar(text, stage));
+    msgDiv.appendChild(actions);
   }
 
   chatContainer.appendChild(msgDiv);
@@ -72,6 +78,72 @@ function addSystemNote(text) {
   note.textContent = text;
   chatContainer.appendChild(note);
   chatContainer.scrollTop = chatContainer.scrollHeight;
+}
+
+// 满意度反馈栏：👍/👎 + 👎 时可选原因标签（静默、不强制、可切换）
+const FB_REASONS = ['不贴合我的情况', '太敷衍', '语气不舒服', '其他'];
+let fbToastShown = false;
+
+function buildFeedbackBar(text, stage) {
+  const wrap = document.createElement('div');
+  wrap.className = 'fb-group';
+
+  const messageId = 'm' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+  let vote = null;
+
+  const up = document.createElement('button');
+  up.className = 'fb-btn';
+  up.textContent = '👍';
+  up.title = '这条回复帮到了我';
+
+  const down = document.createElement('button');
+  down.className = 'fb-btn';
+  down.textContent = '👎';
+  down.title = '这条回复不太对';
+
+  const chips = document.createElement('div');
+  chips.className = 'fb-chips';
+  FB_REASONS.forEach(r => {
+    const c = document.createElement('button');
+    c.className = 'fb-chip';
+    c.textContent = r;
+    c.addEventListener('click', () => submit('down', r));
+    chips.appendChild(c);
+  });
+
+  function render() {
+    up.classList.toggle('active', vote === 'up');
+    down.classList.toggle('active', vote === 'down');
+    chips.classList.toggle('show', vote === 'down');
+  }
+
+  function submit(v, reason = null) {
+    vote = v;
+    render();
+    fetch('/api/feedback', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ messageId, stage: stage || 'unknown', vote: v, reason, text })
+    }).catch(() => {}); // 失败静默，不打扰用户
+
+    if (!fbToastShown) {
+      fbToastShown = true;
+      setTimeout(() => addSystemNote('收到你的反馈，谢谢你告诉我。'), 300);
+    }
+    // 未选原因时，标签条 8 秒后自动收起
+    if (v === 'down' && !reason) {
+      setTimeout(() => { if (vote === 'down') chips.classList.remove('show'); }, 8000);
+    }
+  }
+
+  // 再点一次可取消；👍 ⇄ 👎 可切换（追加新记录，看板按 messageId 归并）
+  up.onclick = () => { vote === 'up' ? (vote = null, render()) : submit('up'); };
+  down.onclick = () => { vote === 'down' ? (vote = null, render()) : submit('down'); };
+
+  wrap.appendChild(up);
+  wrap.appendChild(down);
+  wrap.appendChild(chips);
+  return wrap;
 }
 
 function renderOptions(options) {

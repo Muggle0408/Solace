@@ -58,6 +58,7 @@ app.get('/api/health', (req, res) => {
 // 对话接口
 app.use('/api/chat', rateLimit);
 app.use('/api', chatRoutes);
+app.use('/api', require('./src/routes/feedback'));
 
 module.exports = { app };
 

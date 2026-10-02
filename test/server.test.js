@@ -2,6 +2,8 @@
 process.env.USE_LLM = 'false';
 // 关闭限流，避免高频测试请求被拦截
 process.env.RATE_LIMIT_MAX = '0';
+// 反馈数据写入临时目录，不污染仓库
+process.env.FEEDBACK_FILE = require('path').join(require('os').tmpdir(), `fb-test-${Date.now()}.jsonl`);
 
 const { describe, it } = require('node:test');
 const assert = require('node:assert');
@@ -148,5 +150,28 @@ describe('规则响应器', () => {
     assert.strictEqual(res.stage, 'crisis');
     assert.strictEqual(res.isCrisis, true);
     assert.ok(res.text.includes('全国 24 小时心理援助热线'));
+  });
+});
+
+describe('满意度反馈', () => {
+  it('POST /api/feedback 接收 👍 反馈并落盘', async () => {
+    const res = await request(app)
+      .post('/api/feedback')
+      .send({ messageId: 'test-msg-1', stage: 'check_in', vote: 'up' })
+      .expect(200);
+    assert.strictEqual(res.body.ok, true);
+  });
+
+  it('拒绝非法 vote 值', async () => {
+    await request(app)
+      .post('/api/feedback')
+      .send({ messageId: 'test-msg-2', vote: 'meh' })
+      .expect(400);
+  });
+
+  it('导出接口返回已落盘的反馈', async () => {
+    const res = await request(app).get('/api/feedback/export').expect(200);
+    assert.ok(res.body.count >= 1);
+    assert.ok(Array.isArray(res.body.items));
   });
 });

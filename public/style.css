@@ -199,8 +199,69 @@ body {
   align-items: flex-start;
 }
 
-.tts-btn {
+/* 回复操作栏：朗读在左，👍/👎 在右 */
+.msg-actions {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
   margin-top: 4px;
+  gap: 8px;
+}
+
+.fb-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  position: relative;
+}
+
+.fb-btn {
+  border: 1px solid #e0d8cf;
+  background: #fff;
+  border-radius: 14px;
+  padding: 2px 10px;
+  font-size: 13px;
+  cursor: pointer;
+  color: #8c8078;
+  transition: all 0.2s;
+}
+
+.fb-btn:hover { background: #f5f1ed; }
+.fb-btn.active { background: #ebe4dc; color: #5c4d44; border-color: #a8988a; }
+
+/* 👎 原因标签：内联展开，非弹窗 */
+.fb-chips {
+  display: none;
+  position: absolute;
+  right: 0;
+  top: 32px;
+  background: #fff;
+  border: 1px solid #e8e2dc;
+  border-radius: 12px;
+  padding: 6px;
+  gap: 6px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+  z-index: 5;
+  white-space: nowrap;
+}
+
+.fb-chips.show { display: flex; }
+
+.fb-chip {
+  border: 1px solid #e0d8cf;
+  background: #f5f1ed;
+  border-radius: 12px;
+  padding: 3px 10px;
+  font-size: 12px;
+  cursor: pointer;
+  color: #5c4d44;
+}
+
+.fb-chip:hover { background: #ebe4dc; }
+
+.tts-btn {
+  margin-top: 0;
   padding: 2px 10px;
   border: none;
   background: transparent;
