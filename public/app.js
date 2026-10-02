@@ -3,7 +3,6 @@ const optionsContainer = document.getElementById('options');
 const userInput = document.getElementById('userInput');
 const sendBtn = document.getElementById('sendBtn');
 const micBtn = document.getElementById('micBtn');
-const voiceToggleBtn = document.getElementById('voiceToggleBtn');
 const crisisBanner = document.getElementById('crisisBanner');
 const crisisNumbers = document.getElementById('crisisNumbers');
 
@@ -198,9 +197,6 @@ async function handleUserMessage(text) {
     addMessage(data.text, 'bot', data.stage);
     renderOptions(data.options);
 
-    // 开启自动朗读时，播报本轮 AI 回复
-    if (voiceOn) speak(data.text);
-
     if (data.stage === 'end') {
       saveSession();
     }
@@ -235,7 +231,6 @@ function saveSession() {
 const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 let recognition = null;
 let recording = false;
-let voiceOn = false;
 let speakingBtn = null;
 
 // TTS：朗读文本；再次点击同一按钮停止
@@ -318,23 +313,6 @@ if (micBtn) {
         recognition && recognition.stop();
       } else {
         try { startRecording(); } catch (err) { setRecordingState(false); }
-      }
-    });
-  }
-}
-
-if (voiceToggleBtn) {
-  if (!('speechSynthesis' in window)) {
-    voiceToggleBtn.disabled = true;
-    voiceToggleBtn.title = '当前浏览器不支持语音播报';
-  } else {
-    voiceToggleBtn.addEventListener('click', () => {
-      voiceOn = !voiceOn;
-      voiceToggleBtn.classList.toggle('active', voiceOn);
-      voiceToggleBtn.title = voiceOn ? '已开启自动朗读（点击关闭）' : '自动朗读回复';
-      if (!voiceOn) {
-        speechSynthesis.cancel();
-        if (speakingBtn) speakingBtn.classList.remove('speaking');
       }
     });
   }
