@@ -1,41 +1,68 @@
-// 火山引擎语音合成客户端：情感 TTS（Key 仅存服务端，经环境变量注入）
+// 情感 TTS 客户端：支持火山引擎 / MiniMax 双 Provider，Key 仅存服务端
+// 通过 TTS_PROVIDER 环境变量切换：volc（默认）| minimax
 const axios = require('axios');
 const crypto = require('crypto');
 
-const APPID = process.env.VOLC_APPID;
-const TOKEN = process.env.VOLC_TOKEN;
-const CLUSTER = process.env.VOLC_CLUSTER || 'volcano_tts';
-// 音色 ID 可在火山控制台「音色列表」试听替换，如 zh_female_qingxin（清新女声）
-const VOICE = process.env.VOLC_VOICE || 'zh_female_qingxin';
+const PROVIDER = process.env.TTS_PROVIDER || 'volc';
 
-function isConfigured() {
-  return Boolean(APPID && TOKEN);
-}
+// ---------- 火山引擎 ----------
+const VOLC_APPID = process.env.VOLC_APPID;
+const VOLC_TOKEN = process.env.VOLC_TOKEN;
+const VOLC_CLUSTER = process.env.VOLC_CLUSTER || 'volcano_tts';
+// 音色 ID 可在火山控制台「音色列表」试听替换
+const VOLC_VOICE = process.env.VOLC_VOICE || 'zh_female_qingxin';
 
-// 返回 mp3 Buffer；失败抛错（由路由层降级浏览器朗读）
-async function synthesize(text) {
-  if (!isConfigured()) throw new Error('TTS 未配置火山引擎 Key');
-
+async function volcSynthesize(text) {
   const payload = {
-    app: { appid: APPID, token: TOKEN, cluster: CLUSTER },
+    app: { appid: VOLC_APPID, token: VOLC_TOKEN, cluster: VOLC_CLUSTER },
     user: { uid: 'solace-web' },
-    audio: { voice_type: VOICE, encoding: 'mp3', speed_ratio: 1.0 },
+    audio: { voice_type: VOLC_VOICE, encoding: 'mp3', speed_ratio: 1.0 },
     request: { reqid: crypto.randomUUID(), text, operation: 'query' }
   };
-
   const res = await axios.post('https://openspeech.bytedance.com/api/v1/tts', payload, {
-    headers: {
-      Authorization: `Bearer;${TOKEN}`,
-      'Content-Type': 'application/json'
-    },
+    headers: { Authorization: `Bearer;${VOLC_TOKEN}`, 'Content-Type': 'application/json' },
     timeout: 15000
   });
-
   const data = res.data;
-  if (data.code !== 3000) {
-    throw new Error(`火山TTS错误(${data.code}): ${data.message}`);
-  }
+  if (data.code !== 3000) throw new Error(`火山TTS错误(${data.code}): ${data.message}`);
   return Buffer.from(data.data, 'base64');
 }
 
-module.exports = { synthesize, isConfigured };
+// ---------- MiniMax（海螺）----------
+const MINIMAX_KEY = process.env.MINIMAX_API_KEY;
+const MINIMAX_BASE_URL = process.env.MINIMAX_BASE_URL || 'https://api.minimax.cn/v1/t2a_v2';
+const MINIMAX_MODEL = process.env.MINIMAX_MODEL || 'speech-02-hd';
+// 音色 ID 见文档「系统音色列表」：female-chengshu（成熟女性）/ female-yujie（御姐）等
+const MINIMAX_VOICE = process.env.MINIMAX_VOICE || 'female-chengshu';
+
+async function minimaxSynthesize(text) {
+  const payload = {
+    model: MINIMAX_MODEL,
+    text,
+    stream: false,
+    voice_setting: { voice_id: MINIMAX_VOICE, speed: 1.0, vol: 1.0, pitch: 0 },
+    audio_setting: { sample_rate: 32000, bitrate: 128000, format: 'mp3', channel: 1 }
+  };
+  const res = await axios.post(MINIMAX_BASE_URL, payload, {
+    headers: { Authorization: `Bearer ${MINIMAX_KEY}`, 'Content-Type': 'application/json' },
+    timeout: 20000
+  });
+  const audio = res.data?.data?.audio;
+  if (!audio) throw new Error(`MiniMax TTS 无音频返回: ${JSON.stringify(res.data).slice(0, 200)}`);
+  // MiniMax 返回 hex 编码音频
+  return Buffer.from(audio, 'hex');
+}
+
+// ---------- 统一入口 ----------
+function isConfigured() {
+  if (PROVIDER === 'minimax') return Boolean(MINIMAX_KEY);
+  return Boolean(VOLC_APPID && VOLC_TOKEN);
+}
+
+async function synthesize(text) {
+  if (!isConfigured()) throw new Error('TTS 未配置 Key');
+  if (PROVIDER === 'minimax') return minimaxSynthesize(text);
+  return volcSynthesize(text);
+}
+
+module.exports = { synthesize, isConfigured, PROVIDER };
