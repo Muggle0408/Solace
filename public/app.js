@@ -49,6 +49,7 @@ function addMessage(text, sender, stage = null) {
     const ttsBtn = document.createElement('button');
     ttsBtn.className = 'tts-btn';
     ttsBtn.textContent = '🔊 朗读';
+    ttsBtn.dataset.label = '🔊 朗读';
     ttsBtn.title = '朗读这条回复';
     ttsBtn.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -256,24 +257,31 @@ function speak(text, btn = null) {
   speechSynthesis.speak(utter);
 }
 
-// 云端情感 TTS：优先调用火山引擎；未配置或失败时静默降级浏览器朗读
+// 云端情感 TTS：优先调用豆包语音大模型；未配置或失败时静默降级浏览器朗读
 let currentAudio = null;
 let currentAudioUrl = null;
+let speakSeq = 0;
 
 function stopSpeaking() {
+  speakSeq++; // 使进行中的异步播放失效
   if ('speechSynthesis' in window) speechSynthesis.cancel();
   if (currentAudio) { currentAudio.pause(); currentAudio = null; }
   if (currentAudioUrl) { URL.revokeObjectURL(currentAudioUrl); currentAudioUrl = null; }
-  if (speakingBtn) speakingBtn.classList.remove('speaking');
-  speakingBtn = null;
+  if (speakingBtn) {
+    speakingBtn.classList.remove('speaking');
+    speakingBtn.textContent = speakingBtn.dataset.label || '🔊 朗读';
+    speakingBtn = null;
+  }
 }
 
 async function toggleSpeak(text, btn) {
+  const mySeq = ++speakSeq;
   const isSpeakingThis = speakingBtn === btn;
   stopSpeaking();
   if (isSpeakingThis) return; // 再点一次 = 停止
 
   btn.classList.add('speaking');
+  btn.textContent = '⏳ 合成中…';
   speakingBtn = btn;
 
   try {
@@ -282,22 +290,31 @@ async function toggleSpeak(text, btn) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ text })
     });
+    if (mySeq !== speakSeq) return; // 等待期间被取消了
     if (res.ok) {
       const blob = await res.blob();
+      if (mySeq !== speakSeq) return;
       currentAudioUrl = URL.createObjectURL(blob);
       const audio = new Audio(currentAudioUrl);
       currentAudio = audio;
       audio.onended = audio.onerror = () => {
-        if (speakingBtn === btn) { btn.classList.remove('speaking'); speakingBtn = null; }
+        if (speakingBtn === btn) {
+          btn.classList.remove('speaking');
+          btn.textContent = btn.dataset.label || '🔊 朗读';
+          speakingBtn = null;
+        }
         if (currentAudioUrl) { URL.revokeObjectURL(currentAudioUrl); currentAudioUrl = null; }
         currentAudio = null;
       };
+      btn.textContent = '🔊 点击停止';
       await audio.play();
       return;
     }
   } catch (err) {
     // 网络或接口异常 → 走降级
   }
+  if (mySeq !== speakSeq) return;
+  btn.textContent = btn.dataset.label || '🔊 朗读';
   speak(text, btn);
 }
 
