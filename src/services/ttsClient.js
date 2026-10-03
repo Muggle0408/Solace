@@ -46,23 +46,23 @@ async function volcSynthesize(text) {
   }
 
   // 响应可能为单个 JSON 或多行 chunked JSON，统一解析并拼接音频数据
+  // 注意：V3 协议首包 code=0、结束包 code=20000000，均为成功；音频在中间的 data 字段
   const raw = res.data;
-  let code = 0;
-  let message = 'OK';
   let data = '';
   try {
     const payload = JSON.parse(raw);
-    code = payload.code;
-    message = payload.message;
+    if (payload.code !== 0 && payload.code !== 20000000) {
+      throw new Error(`豆包TTS错误(${payload.code}): ${payload.message}`);
+    }
     data = payload.data || '';
-  } catch {
+  } catch (parseErr) {
+    if (parseErr instanceof SyntaxError === false && String(parseErr.message).includes('豆包TTS错误')) throw parseErr;
     const parts = raw.split('\n').filter(Boolean).map(line => JSON.parse(line));
-    const failed = parts.find(p => p.code !== 0);
-    code = failed ? failed.code : 0;
-    message = failed ? failed.message : 'OK';
+    const failed = parts.find(p => p.code !== 0 && p.code !== 20000000);
+    if (failed) throw new Error(`豆包TTS错误(${failed.code}): ${failed.message}`);
     data = parts.map(p => p.data || '').join('');
   }
-  if (code !== 0) throw new Error(`豆包TTS错误(${code}): ${message}`);
+  if (!data) throw new Error('豆包TTS 返回空音频');
   return Buffer.from(data, 'base64');
 }
 
