@@ -4,19 +4,11 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>情绪空间 · 高敏感人群情绪疏导</title>
-  <script type="importmap">
-  {
-    "imports": {
-      "three": "/vendor/three/three.module.js",
-      "three/addons/": "/vendor/three/addons/"
-    }
-  }
-  </script>
-  <link rel="stylesheet" href="style.css?v=20261019">
+  <link rel="stylesheet" href="style.css?v=20261020">
 </head>
 <body>
-  <!-- 背景：3D 粒子蝴蝶（WebGL 不可用时回退为 CSS 渐变） -->
-  <div id="bg3d" aria-hidden="true"><canvas id="bg-canvas"></canvas></div>
+  <!-- 背景：油画风白蓝幕布（上白下蓝自然过渡，蝴蝶常驻，带油画颗粒） -->
+  <div class="bg-photo" aria-hidden="true"></div>
 
   <div class="app">
     <header class="header">
@@ -46,6 +38,5 @@
   </div>
 
   <script src="app.js?v=20261010"></script>
-  <script type="module" src="butterfly3d.js?v=20261019"></script>
 </body>
 </html>
