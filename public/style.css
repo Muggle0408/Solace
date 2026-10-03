@@ -6,9 +6,10 @@
 
 body {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  background: #f5f1ed;
-  color: #3d3d3d;
+  background: linear-gradient(180deg, #f7f5fc 0%, #eef1fa 32%, #dfe9f8 50%, #c2d7f0 63%, #7ea9dd 74%, #2b5fa8 100%);
+  color: #33415c;
   line-height: 1.6;
+  min-height: 100vh;
 }
 
 .app {
@@ -23,18 +24,18 @@ body {
   padding: 20px;
   text-align: center;
   background: #fff;
-  border-bottom: 1px solid #e8e2dc;
+  border-bottom: 1px solid #c3d2e8;
 }
 
 .header h1 {
   font-size: 22px;
-  color: #5c4d44;
+  color: #3c4f6e;
   font-weight: 600;
 }
 
 .subtitle {
   font-size: 13px;
-  color: #8c8078;
+  color: #6d7f99;
   margin-top: 4px;
 }
 
@@ -70,13 +71,13 @@ body {
 
 .message.bot .bubble {
   background: #fff;
-  color: #4a4a4a;
+  color: #3a4763;
   border-bottom-left-radius: 4px;
   box-shadow: 0 1px 2px rgba(0,0,0,0.04);
 }
 
 .message.user .bubble {
-  background: #8c7b6e;
+  background: #4a678f;
   color: #fff;
   border-bottom-right-radius: 4px;
 }
@@ -95,7 +96,7 @@ body {
 
 .input-area {
   background: #fff;
-  border-top: 1px solid #e8e2dc;
+  border-top: 1px solid #c3d2e8;
   padding: 14px 20px 20px;
 }
 
@@ -107,9 +108,9 @@ body {
 }
 
 .option-btn {
-  background: #f5f1ed;
-  border: 1px solid #ddd5cc;
-  color: #5c4d44;
+  background: rgba(255, 255, 255, .78);
+  border: 1px solid #c3d2e8;
+  color: #3c4f6e;
   padding: 8px 14px;
   border-radius: 20px;
   font-size: 14px;
@@ -118,7 +119,7 @@ body {
 }
 
 .option-btn:hover {
-  background: #ebe4dc;
+  background: rgba(255, 255, 255, .95);
 }
 
 .text-input-row {
@@ -129,18 +130,18 @@ body {
 #userInput {
   flex: 1;
   padding: 12px 16px;
-  border: 1px solid #ddd5cc;
+  border: 1px solid #c3d2e8;
   border-radius: 24px;
   font-size: 15px;
   outline: none;
 }
 
 #userInput:focus {
-  border-color: #a8988a;
+  border-color: #7d90ad;
 }
 
 #sendBtn {
-  background: #8c7b6e;
+  background: #4a678f;
   color: #fff;
   border: none;
   padding: 12px 22px;
@@ -150,12 +151,12 @@ body {
 }
 
 #sendBtn:hover {
-  background: #7a6a5e;
+  background: #3d5680;
 }
 
 .system-note {
   text-align: center;
-  color: #9a9089;
+  color: #8496ad;
   font-size: 12px;
   margin: 8px 0;
 }
@@ -166,14 +167,14 @@ body {
   height: 44px;
   flex-shrink: 0;
   border-radius: 50%;
-  border: 1px solid #ddd5cc;
-  background: #f5f1ed;
+  border: 1px solid #c3d2e8;
+  background: rgba(255, 255, 255, .78);
   font-size: 18px;
   cursor: pointer;
   transition: all 0.2s;
 }
 
-.icon-btn:hover { background: #ebe4dc; }
+.icon-btn:hover { background: rgba(255, 255, 255, .95); }
 .icon-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 
 .icon-btn.recording {
@@ -184,8 +185,8 @@ body {
 }
 
 .icon-btn.active {
-  background: #8c7b6e;
-  border-color: #8c7b6e;
+  background: #4a678f;
+  border-color: #4a678f;
 }
 
 @keyframes pulse {
@@ -217,18 +218,18 @@ body {
 }
 
 .fb-btn {
-  border: 1px solid #e0d8cf;
+  border: 1px solid #c3d2e8;
   background: #fff;
   border-radius: 14px;
   padding: 2px 10px;
   font-size: 13px;
   cursor: pointer;
-  color: #8c8078;
+  color: #6d7f99;
   transition: all 0.2s;
 }
 
-.fb-btn:hover { background: #f5f1ed; }
-.fb-btn.active { background: #ebe4dc; color: #5c4d44; border-color: #a8988a; }
+.fb-btn:hover { background: rgba(255, 255, 255, .78); }
+.fb-btn.active { background: rgba(255, 255, 255, .95); color: #3c4f6e; border-color: #7d90ad; }
 
 /* 👎 原因标签：内联展开，非弹窗 */
 .fb-chips {
@@ -237,7 +238,7 @@ body {
   right: 0;
   top: 32px;
   background: #fff;
-  border: 1px solid #e8e2dc;
+  border: 1px solid #c3d2e8;
   border-radius: 12px;
   padding: 6px;
   gap: 6px;
@@ -249,32 +250,123 @@ body {
 .fb-chips.show { display: flex; }
 
 .fb-chip {
-  border: 1px solid #e0d8cf;
-  background: #f5f1ed;
+  border: 1px solid #c3d2e8;
+  background: rgba(255, 255, 255, .78);
   border-radius: 12px;
   padding: 3px 10px;
   font-size: 12px;
   cursor: pointer;
-  color: #5c4d44;
+  color: #3c4f6e;
 }
 
-.fb-chip:hover { background: #ebe4dc; }
+.fb-chip:hover { background: rgba(255, 255, 255, .95); }
 
 .tts-btn {
   margin-top: 0;
   padding: 2px 10px;
   border: none;
   background: transparent;
-  color: #a8988a;
+  color: #7d90ad;
   font-size: 12px;
   cursor: pointer;
   border-radius: 12px;
   transition: all 0.2s;
 }
 
-.tts-btn:hover { background: #ebe4dc; color: #5c4d44; }
+.tts-btn:hover { background: rgba(255, 255, 255, .95); color: #3c4f6e; }
 .tts-btn.speaking { color: #c96a5a; }
 
 @media (max-width: 480px) {
   .icon-btn { width: 40px; height: 40px; font-size: 16px; }
+}
+
+/* ============ 蓝紫水彩湿地背景场景 ============ */
+.bg-scene {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.scene-svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+/* 发光蝴蝶：缓慢扇翅 + 悬浮漂移（低刺激） */
+.butterfly {
+  transform-box: fill-box;
+  animation: bFloat 7s ease-in-out infinite;
+}
+
+@keyframes bFloat {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-12px); }
+}
+
+.bwing {
+  transform-box: fill-box;
+  animation: flap 1.6s ease-in-out infinite alternate;
+}
+.bwing-l { transform-origin: 100% 50%; }
+.bwing-r { transform-origin: 0% 50%; animation-delay: .06s; }
+
+@keyframes flap {
+  from { transform: scaleX(1); }
+  to { transform: scaleX(.58); }
+}
+
+/* 雾中浮光 */
+.light-dot {
+  position: absolute;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, .95);
+  box-shadow: 0 0 12px 4px rgba(255, 255, 255, .55);
+  opacity: 0;
+  animation: floatUp 9s ease-in-out infinite;
+}
+
+@keyframes floatUp {
+  0%   { transform: translateY(0); opacity: 0; }
+  25%  { opacity: .8; }
+  100% { transform: translateY(-46px); opacity: 0; }
+}
+
+/* 系统开启"减少动态效果"时全部静止 */
+@media (prefers-reduced-motion: reduce) {
+  .butterfly, .bwing, .light-dot { animation: none !important; }
+  .light-dot { display: none; }
+}
+
+/* ============ UI 卡片化（浮于水彩之上） ============ */
+.app {
+  position: relative;
+  z-index: 1;
+  max-width: 680px;
+  padding: 0 10px;
+}
+
+.header {
+  background: rgba(255, 255, 255, .85);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border-bottom: none;
+  border-radius: 20px;
+  margin: 14px 4px 6px;
+  box-shadow: 0 6px 24px rgba(74, 104, 156, .16);
+}
+
+.input-area {
+  background: rgba(255, 255, 255, .88);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border-top: none;
+  border-radius: 20px;
+  margin: 8px 4px 14px;
+  box-shadow: 0 8px 28px rgba(74, 104, 156, .18);
 }

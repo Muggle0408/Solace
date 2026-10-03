@@ -7,6 +7,94 @@
   <link rel="stylesheet" href="style.css?v=20261007">
 </head>
 <body>
+  <!-- 背景：蓝紫水彩湿地（雾白天空/芦苇丛/发光蝴蝶/蓝色草地/纸纹理），纯 SVG+CSS -->
+  <div class="bg-scene" aria-hidden="true">
+    <svg class="scene-svg" viewBox="0 0 1440 900" preserveAspectRatio="xMidYMid slice">
+      <defs>
+        <linearGradient id="grassGrad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stop-color="#8fb9e6"/>
+          <stop offset=".55" stop-color="#3a6cb4"/>
+          <stop offset="1" stop-color="#2b5fa8"/>
+        </linearGradient>
+        <filter id="paperTex" x="0" y="0" width="100%" height="100%">
+          <feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" stitchTiles="stitch"/>
+          <feColorMatrix type="saturate" values="0"/>
+          <feComponentTransfer><feFuncA type="linear" slope="0.05"/></feComponentTransfer>
+        </filter>
+        <filter id="softGlow" x="-60%" y="-60%" width="220%" height="220%">
+          <feGaussianBlur stdDeviation="9"/>
+        </filter>
+        <g id="reed">
+          <path d="M0,0 C5,-32 -5,-64 2,-96" fill="none"/>
+          <ellipse cx="2" cy="-106" rx="5.5" ry="18"/>
+          <path d="M0,-40 C-12,-52 -18,-64 -20,-78" fill="none" stroke-width="2"/>
+        </g>
+      </defs>
+
+      <!-- 底部草地（深蓝水彩 + 湿画晕染斑） -->
+      <rect x="0" y="660" width="1440" height="240" fill="url(#grassGrad)" opacity=".92"/>
+      <ellipse cx="500" cy="760" rx="300" ry="60" fill="#a9c8ec" opacity=".22"/>
+      <ellipse cx="1050" cy="820" rx="340" ry="70" fill="#9dbde6" opacity=".2"/>
+      <ellipse cx="250" cy="850" rx="260" ry="55" fill="#86aede" opacity=".22"/>
+      <g stroke="#2456a0" stroke-width="3" opacity=".45" fill="none" stroke-linecap="round">
+        <path d="M180,668 q-6,-38 -14,-50"/>
+        <path d="M340,672 q8,-34 4,-52"/>
+        <path d="M560,666 q-4,-40 -12,-54"/>
+        <path d="M745,672 q6,-30 12,-48"/>
+        <path d="M955,668 q-8,-36 -6,-52"/>
+        <path d="M1185,672 q6,-34 14,-50"/>
+        <path d="M1330,668 q-6,-38 -12,-52"/>
+      </g>
+
+      <!-- 芦苇丛：三层景深，远浅近深 -->
+      <g stroke="#a9bed4" fill="#a9bed4" opacity=".45">
+        <use href="#reed" transform="translate(140,636) scale(1)"/>
+        <use href="#reed" transform="translate(430,640) scale(1.08)"/>
+        <use href="#reed" transform="translate(760,634) scale(.92)"/>
+        <use href="#reed" transform="translate(1080,640) scale(1.05)"/>
+        <use href="#reed" transform="translate(1380,636) scale(.95)"/>
+      </g>
+      <g stroke="#86a4c4" fill="#86a4c4" opacity=".5">
+        <use href="#reed" transform="translate(280,652) scale(1.3)"/>
+        <use href="#reed" transform="translate(620,656) scale(1.42)"/>
+        <use href="#reed" transform="translate(930,652) scale(1.24)"/>
+        <use href="#reed" transform="translate(1240,656) scale(1.36)"/>
+      </g>
+      <g stroke="#5f82ab" fill="#5f82ab" opacity=".55">
+        <use href="#reed" transform="translate(90,674) scale(1.7)"/>
+        <use href="#reed" transform="translate(520,678) scale(1.9)"/>
+        <use href="#reed" transform="translate(880,674) scale(1.62)"/>
+        <use href="#reed" transform="translate(1170,678) scale(1.84)"/>
+        <use href="#reed" transform="translate(1420,674) scale(1.7)"/>
+      </g>
+
+      <!-- 发光白蝴蝶（中下部偏左，缓慢扇翅+悬浮） -->
+      <g transform="translate(430,520) scale(1.15)">
+        <g class="butterfly">
+          <ellipse cx="0" cy="0" rx="58" ry="46" fill="#ffffff" opacity=".4" filter="url(#softGlow)"/>
+          <g transform="scale(-1,1)"><g class="bwing bwing-r">
+            <path d="M0,-6 C-26,-40 -60,-34 -54,-8 C-50,8 -18,6 0,-2 Z" fill="#ffffff" opacity=".78"/>
+            <path d="M0,2 C-22,6 -40,20 -34,34 C-28,44 -8,30 0,10 Z" fill="#ffffff" opacity=".66"/>
+          </g></g>
+          <g class="bwing bwing-l">
+            <path d="M0,-6 C-26,-40 -60,-34 -54,-8 C-50,8 -18,6 0,-2 Z" fill="#ffffff" opacity=".78"/>
+            <path d="M0,2 C-22,6 -40,20 -34,34 C-28,44 -8,30 0,10 Z" fill="#ffffff" opacity=".66"/>
+          </g>
+          <ellipse cx="0" cy="2" rx="3.2" ry="15" fill="#ffffff" opacity=".92"/>
+        </g>
+      </g>
+
+      <!-- 水彩纸纹理（全幅噪点） -->
+      <rect x="0" y="0" width="1440" height="900" filter="url(#paperTex)" opacity=".5"/>
+    </svg>
+
+    <!-- 雾中浮光 -->
+    <span class="light-dot" style="left:22%; top:42%; animation-delay:0s;"></span>
+    <span class="light-dot" style="left:40%; top:55%; animation-delay:2.5s;"></span>
+    <span class="light-dot" style="left:63%; top:46%; animation-delay:1.2s;"></span>
+    <span class="light-dot" style="left:82%; top:58%; animation-delay:4s;"></span>
+  </div>
+
   <div class="app">
     <header class="header">
       <h1>情绪空间</h1>
