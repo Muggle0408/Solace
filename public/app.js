@@ -299,9 +299,11 @@ async function toggleSpeak(text, btn) {
       signal: controller.signal
     });
     clearTimeout(ttsTimeout);
+    console.log('[朗读] 合成接口返回:', res.status);
     if (mySeq !== speakSeq) return; // 等待期间被取消了
     if (res.ok) {
       const blob = await res.blob();
+      console.log('[朗读] 音频大小:', blob.size, '字节');
       if (mySeq !== speakSeq) return;
       currentAudioUrl = URL.createObjectURL(blob);
       const audio = new Audio(currentAudioUrl);
@@ -316,11 +318,18 @@ async function toggleSpeak(text, btn) {
         currentAudio = null;
       };
       btn.textContent = '🔊 点击停止';
-      await audio.play();
+      try {
+        await audio.play();
+        console.log('[朗读] 播放已开始');
+      } catch (playErr) {
+        console.warn('[朗读] 播放被浏览器阻止:', playErr.name, playErr.message);
+        throw playErr;
+      }
       return;
     }
   } catch (err) {
     clearTimeout(ttsTimeout);
+    console.warn('[朗读] 异常:', err.name, err.message);
     // 网络超时或接口异常 → 走降级
   }
   if (mySeq !== speakSeq) return;
