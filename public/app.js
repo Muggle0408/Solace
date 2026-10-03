@@ -3,7 +3,6 @@ const optionsContainer = document.getElementById('options');
 const userInput = document.getElementById('userInput');
 const sendBtn = document.getElementById('sendBtn');
 const micBtn = document.getElementById('micBtn');
-const voiceToggleBtn = document.getElementById('voiceToggleBtn');
 const crisisBanner = document.getElementById('crisisBanner');
 const crisisNumbers = document.getElementById('crisisNumbers');
 
@@ -61,8 +60,8 @@ function addMessage(text, sender, stage = null) {
     actions.appendChild(buildFeedbackBar(text, stage));
     msgDiv.appendChild(actions);
 
-    // 自动播放：新回复到达即朗读（可用输入区 🔊 关闭；新回复会自然打断上一条）
-    if (voiceOn) toggleSpeak(text, ttsBtn);
+    // 自动播放：新回复到达即朗读（点播放图标可停止/重播；新回复会自然打断上一条）
+    toggleSpeak(text, ttsBtn);
   }
 
   chatContainer.appendChild(msgDiv);
@@ -237,8 +236,6 @@ const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecogni
 let recognition = null;
 let recording = false;
 let speakingBtn = null;
-// 自动朗读开关：默认开；新回复到达即播报，点 🔊 可随时停止
-let voiceOn = true;
 
 // TTS：浏览器自带朗读（作为降级方案）
 function speak(text, btn = null) {
@@ -290,12 +287,18 @@ async function toggleSpeak(text, btn) {
   btn.textContent = '⏳ 合成中…';
   speakingBtn = btn;
 
+  // 15 秒超时保护：网络异常时绝不永久卡在"合成中"
+  const controller = new AbortController();
+  const ttsTimeout = setTimeout(() => controller.abort(), 15000);
+
   try {
     const res = await fetch('/api/tts', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text })
+      body: JSON.stringify({ text }),
+      signal: controller.signal
     });
+    clearTimeout(ttsTimeout);
     if (mySeq !== speakSeq) return; // 等待期间被取消了
     if (res.ok) {
       const blob = await res.blob();
@@ -317,7 +320,8 @@ async function toggleSpeak(text, btn) {
       return;
     }
   } catch (err) {
-    // 网络或接口异常 → 走降级
+    clearTimeout(ttsTimeout);
+    // 网络超时或接口异常 → 走降级
   }
   if (mySeq !== speakSeq) return;
   btn.textContent = btn.dataset.label || '🔊 朗读';
@@ -370,15 +374,6 @@ if (micBtn) {
       }
     });
   }
-}
-
-if (voiceToggleBtn) {
-  voiceToggleBtn.addEventListener('click', () => {
-    voiceOn = !voiceOn;
-    voiceToggleBtn.classList.toggle('active', voiceOn);
-    voiceToggleBtn.title = voiceOn ? '自动朗读已开（点击关闭）' : '自动朗读已关（点击开启）';
-    if (!voiceOn) stopSpeaking();
-  });
 }
 
 sendBtn.addEventListener('click', () => handleUserMessage(userInput.value));

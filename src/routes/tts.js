@@ -13,11 +13,13 @@ router.post('/tts', async (req, res) => {
   if (!isConfigured()) {
     return res.status(501).json({ error: 'TTS_NOT_CONFIGURED' });
   }
+  const startAt = Date.now();
   try {
     const audio = await synthesize(text);
     res.set('Content-Type', 'audio/mpeg');
     res.set('Cache-Control', 'no-store');
     res.send(audio);
+    console.log(`[TTS] 合成成功 | ${Date.now() - startAt}ms | ${audio.length}字节`);
   } catch (err) {
     console.error('[TTS] 合成失败:', err.message);
     res.status(502).json({ error: 'TTS_FAILED' });
