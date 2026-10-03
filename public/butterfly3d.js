@@ -292,7 +292,9 @@ window.addEventListener('resize', () => {
 const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 const clock = new THREE.Clock();
 let firstFrameLogged = false;
+renderer.info.autoReset = false; // 手动计数，覆盖合成器的多次渲染
 function tick() {
+  renderer.info.reset();
   const dt = Math.min(clock.getDelta(), 0.05);
   const t = clock.elapsedTime;
   uniforms.uTime.value = t;
