@@ -11,6 +11,8 @@ const VOLC_API_KEY = process.env.VOLC_API_KEY;
 // 音色 ID 见豆包语音控制台「音色库」，如 zh_female_meilinvyou_uranus_bigtts（魅力女友）
 const VOLC_VOICE = process.env.VOLC_VOICE || 'zh_female_meilinvyou_uranus_bigtts';
 const VOLC_RESOURCE = process.env.VOLC_RESOURCE || 'seed-tts-2.0';
+// 语速：-50(0.5x) ~ 100(2.0x)，默认轻微加速 10
+const VOLC_SPEECH_RATE = Number(process.env.VOLC_SPEECH_RATE ?? 10);
 
 async function volcSynthesize(text) {
   let res;
@@ -21,7 +23,7 @@ async function volcSynthesize(text) {
         req_params: {
           text,
           speaker: VOLC_VOICE,
-          audio_params: { format: 'mp3', sample_rate: 24000 }
+          audio_params: { format: 'mp3', sample_rate: 24000, speech_rate: VOLC_SPEECH_RATE }
         }
       },
       {

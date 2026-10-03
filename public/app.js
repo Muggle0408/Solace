@@ -3,6 +3,7 @@ const optionsContainer = document.getElementById('options');
 const userInput = document.getElementById('userInput');
 const sendBtn = document.getElementById('sendBtn');
 const micBtn = document.getElementById('micBtn');
+const voiceToggleBtn = document.getElementById('voiceToggleBtn');
 const crisisBanner = document.getElementById('crisisBanner');
 const crisisNumbers = document.getElementById('crisisNumbers');
 
@@ -59,6 +60,9 @@ function addMessage(text, sender, stage = null) {
 
     actions.appendChild(buildFeedbackBar(text, stage));
     msgDiv.appendChild(actions);
+
+    // 自动播放：新回复到达即朗读（可用输入区 🔊 关闭；新回复会自然打断上一条）
+    if (voiceOn) toggleSpeak(text, ttsBtn);
   }
 
   chatContainer.appendChild(msgDiv);
@@ -233,6 +237,8 @@ const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecogni
 let recognition = null;
 let recording = false;
 let speakingBtn = null;
+// 自动朗读开关：默认开；新回复到达即播报，点 🔊 可随时停止
+let voiceOn = true;
 
 // TTS：浏览器自带朗读（作为降级方案）
 function speak(text, btn = null) {
@@ -364,6 +370,15 @@ if (micBtn) {
       }
     });
   }
+}
+
+if (voiceToggleBtn) {
+  voiceToggleBtn.addEventListener('click', () => {
+    voiceOn = !voiceOn;
+    voiceToggleBtn.classList.toggle('active', voiceOn);
+    voiceToggleBtn.title = voiceOn ? '自动朗读已开（点击关闭）' : '自动朗读已关（点击开启）';
+    if (!voiceOn) stopSpeaking();
+  });
 }
 
 sendBtn.addEventListener('click', () => handleUserMessage(userInput.value));
