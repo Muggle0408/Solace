@@ -4,9 +4,121 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>情绪空间 · 高敏感人群情绪疏导</title>
-  <link rel="stylesheet" href="style.css?v=20261007">
+  <link rel="stylesheet" href="style.css?v=20261008">
 </head>
 <body>
+  <!-- 背景自然场景：远山 / 森林 / 柳枝（动效）/ 飘叶 / 光斑（纯 SVG+CSS，无图片依赖） -->
+  <div class="bg-scene" aria-hidden="true">
+    <svg class="scene-svg" viewBox="0 0 1440 900" preserveAspectRatio="xMidYMid slice">
+      <defs>
+        <linearGradient id="grassGrad" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stop-color="#8cb067"/>
+          <stop offset="1" stop-color="#6d9151"/>
+        </linearGradient>
+        <g id="pine">
+          <path d="M0,-78 L15,-44 L7,-44 L22,-14 L10,-14 L30,20 L12,20 L12,30 L-12,30 L-12,20 L-30,20 L-10,-14 L-22,-14 L-7,-44 L-15,-44 Z"/>
+        </g>
+      </defs>
+
+      <!-- 远山（两层，雾感） -->
+      <path d="M0,530 Q220,430 470,505 Q620,548 780,498 Q980,436 1180,512 Q1330,556 1440,520 L1440,900 L0,900 Z" fill="#ccd8bc" opacity=".75"/>
+      <path d="M0,585 Q260,502 520,565 Q760,618 1000,558 Q1250,505 1440,582 L1440,900 L0,900 Z" fill="#b9cba6" opacity=".8"/>
+
+      <!-- 远林 -->
+      <g fill="#8aa578" opacity=".85">
+        <use href="#pine" transform="translate(30,640) scale(0.9)"/>
+        <use href="#pine" transform="translate(120,648) scale(1.05)"/>
+        <use href="#pine" transform="translate(215,638) scale(0.85)"/>
+        <use href="#pine" transform="translate(305,650) scale(1.1)"/>
+        <use href="#pine" transform="translate(400,642) scale(0.95)"/>
+        <use href="#pine" transform="translate(495,652) scale(1.15)"/>
+        <use href="#pine" transform="translate(590,644) scale(0.9)"/>
+        <use href="#pine" transform="translate(685,652) scale(1.05)"/>
+        <use href="#pine" transform="translate(780,642) scale(0.95)"/>
+        <use href="#pine" transform="translate(880,650) scale(1.1)"/>
+        <use href="#pine" transform="translate(975,640) scale(0.9)"/>
+        <use href="#pine" transform="translate(1070,650) scale(1.05)"/>
+        <use href="#pine" transform="translate(1165,642) scale(0.95)"/>
+        <use href="#pine" transform="translate(1260,650) scale(1.1)"/>
+        <use href="#pine" transform="translate(1360,644) scale(0.9)"/>
+      </g>
+
+      <!-- 近林（两色层叠） -->
+      <g fill="#52704a">
+        <use href="#pine" transform="translate(60,712) scale(1.5)"/>
+        <use href="#pine" transform="translate(200,724) scale(1.75)"/>
+        <use href="#pine" transform="translate(350,708) scale(1.4)"/>
+        <use href="#pine" transform="translate(500,724) scale(1.7)"/>
+        <use href="#pine" transform="translate(650,710) scale(1.45)"/>
+        <use href="#pine" transform="translate(800,724) scale(1.75)"/>
+        <use href="#pine" transform="translate(960,708) scale(1.4)"/>
+        <use href="#pine" transform="translate(1110,724) scale(1.65)"/>
+        <use href="#pine" transform="translate(1260,710) scale(1.5)"/>
+        <use href="#pine" transform="translate(1400,720) scale(1.7)"/>
+      </g>
+      <g fill="#47603f">
+        <use href="#pine" transform="translate(130,730) scale(1.95)"/>
+        <use href="#pine" transform="translate(420,736) scale(2.1)"/>
+        <use href="#pine" transform="translate(720,730) scale(2)"/>
+        <use href="#pine" transform="translate(1020,736) scale(2.15)"/>
+        <use href="#pine" transform="translate(1330,730) scale(2)"/>
+      </g>
+
+      <!-- 草地 + 光感亮斑 -->
+      <rect x="0" y="726" width="1440" height="174" fill="url(#grassGrad)"/>
+      <ellipse cx="720" cy="792" rx="540" ry="52" fill="#a9c57f" opacity=".45"/>
+      <ellipse cx="430" cy="812" rx="240" ry="34" fill="#b7cf8e" opacity=".4"/>
+      <ellipse cx="1050" cy="818" rx="280" ry="36" fill="#b7cf8e" opacity=".35"/>
+
+      <!-- 柳枝（右上主枝 + 左上小枝）——整枝随风轻摆 -->
+      <g transform="translate(1420,6)">
+      <g class="willow willow-r">
+        <path d="M0,-24 C-90,30 -190,55 -320,98" fill="none" stroke="#7a9159" stroke-width="6" stroke-linecap="round"/>
+        <path d="M-128,50 C-165,82 -195,112 -220,152" fill="none" stroke="#7a9159" stroke-width="4" stroke-linecap="round"/>
+        <g class="willow-leaves">
+          <ellipse class="leaf" cx="-62" cy="12" rx="16" ry="6" fill="#7c9a5e" transform="rotate(24 -62 12)"/>
+          <ellipse class="leaf" cx="-112" cy="34" rx="16" ry="6" fill="#8faa6a" transform="rotate(12 -112 34)"/>
+          <ellipse class="leaf" cx="-164" cy="52" rx="16" ry="6" fill="#71905a" transform="rotate(30 -164 52)"/>
+          <ellipse class="leaf" cx="-212" cy="66" rx="16" ry="6" fill="#7c9a5e" transform="rotate(10 -212 66)"/>
+          <ellipse class="leaf" cx="-258" cy="80" rx="16" ry="6" fill="#8faa6a" transform="rotate(28 -258 80)"/>
+          <ellipse class="leaf" cx="-302" cy="94" rx="16" ry="6" fill="#7c9a5e" transform="rotate(12 -302 94)"/>
+          <ellipse class="leaf" cx="-90" cy="26" rx="14" ry="5" fill="#71905a" transform="rotate(-14 -90 26)"/>
+          <ellipse class="leaf" cx="-150" cy="74" rx="15" ry="5.5" fill="#7c9a5e" transform="rotate(58 -150 74)"/>
+          <ellipse class="leaf" cx="-186" cy="106" rx="15" ry="5.5" fill="#8faa6a" transform="rotate(48 -186 106)"/>
+          <ellipse class="leaf" cx="-216" cy="142" rx="14" ry="5" fill="#71905a" transform="rotate(62 -216 142)"/>
+        </g>
+      </g>
+      </g>
+      <g transform="translate(16,-10) scale(-0.8,0.8)">
+      <g class="willow willow-l">
+        <path d="M0,-24 C-80,28 -170,52 -280,90" fill="none" stroke="#7a9159" stroke-width="6" stroke-linecap="round"/>
+        <g class="willow-leaves">
+          <ellipse class="leaf" cx="-58" cy="12" rx="16" ry="6" fill="#7c9a5e" transform="rotate(24 -58 12)"/>
+          <ellipse class="leaf" cx="-110" cy="32" rx="16" ry="6" fill="#8faa6a" transform="rotate(12 -110 32)"/>
+          <ellipse class="leaf" cx="-162" cy="50" rx="16" ry="6" fill="#71905a" transform="rotate(30 -162 50)"/>
+          <ellipse class="leaf" cx="-212" cy="64" rx="16" ry="6" fill="#7c9a5e" transform="rotate(10 -212 64)"/>
+          <ellipse class="leaf" cx="-258" cy="78" rx="16" ry="6" fill="#8faa6a" transform="rotate(26 -258 78)"/>
+          <ellipse class="leaf" cx="-86" cy="24" rx="14" ry="5" fill="#71905a" transform="rotate(-12 -86 24)"/>
+        </g>
+      </g>
+      </g>
+    </svg>
+
+    <!-- 飘落的单片柳叶（动图） -->
+    <span class="fall-leaf" style="left:16%; animation-duration:13s; animation-delay:0s;"></span>
+    <span class="fall-leaf" style="left:38%; animation-duration:16s; animation-delay:5s;"></span>
+    <span class="fall-leaf" style="left:64%; animation-duration:12s; animation-delay:2.5s;"></span>
+    <span class="fall-leaf" style="left:86%; animation-duration:15s; animation-delay:8s;"></span>
+
+    <!-- 林间浮动的光斑 -->
+    <span class="light-dot" style="left:12%; top:58%; animation-delay:0s;"></span>
+    <span class="light-dot" style="left:30%; top:70%; animation-delay:2s;"></span>
+    <span class="light-dot" style="left:52%; top:62%; animation-delay:4s;"></span>
+    <span class="light-dot" style="left:70%; top:74%; animation-delay:1s;"></span>
+    <span class="light-dot" style="left:88%; top:60%; animation-delay:3s;"></span>
+    <span class="light-dot" style="left:45%; top:80%; animation-delay:5s;"></span>
+  </div>
+
   <div class="app">
     <header class="header">
       <h1>情绪空间</h1>
@@ -34,6 +146,6 @@
     </div>
   </div>
 
-  <script src="app.js?v=20261007"></script>
+  <script src="app.js?v=20261008"></script>
 </body>
 </html>
