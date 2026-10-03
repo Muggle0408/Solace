@@ -233,7 +233,7 @@ let recognition = null;
 let recording = false;
 let speakingBtn = null;
 
-// TTS：朗读文本；再次点击同一按钮停止
+// TTS：浏览器自带朗读（作为降级方案）
 function speak(text, btn = null) {
   if (!('speechSynthesis' in window)) return;
   speechSynthesis.cancel();
@@ -256,18 +256,49 @@ function speak(text, btn = null) {
   speechSynthesis.speak(utter);
 }
 
-function toggleSpeak(text, btn) {
-  if (!('speechSynthesis' in window)) {
-    addSystemNote('当前浏览器不支持语音播报，建议使用 Chrome / Edge。');
-    return;
+// 云端情感 TTS：优先调用火山引擎；未配置或失败时静默降级浏览器朗读
+let currentAudio = null;
+let currentAudioUrl = null;
+
+function stopSpeaking() {
+  if ('speechSynthesis' in window) speechSynthesis.cancel();
+  if (currentAudio) { currentAudio.pause(); currentAudio = null; }
+  if (currentAudioUrl) { URL.revokeObjectURL(currentAudioUrl); currentAudioUrl = null; }
+  if (speakingBtn) speakingBtn.classList.remove('speaking');
+  speakingBtn = null;
+}
+
+async function toggleSpeak(text, btn) {
+  const isSpeakingThis = speakingBtn === btn;
+  stopSpeaking();
+  if (isSpeakingThis) return; // 再点一次 = 停止
+
+  btn.classList.add('speaking');
+  speakingBtn = btn;
+
+  try {
+    const res = await fetch('/api/tts', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text })
+    });
+    if (res.ok) {
+      const blob = await res.blob();
+      currentAudioUrl = URL.createObjectURL(blob);
+      const audio = new Audio(currentAudioUrl);
+      currentAudio = audio;
+      audio.onended = audio.onerror = () => {
+        if (speakingBtn === btn) { btn.classList.remove('speaking'); speakingBtn = null; }
+        if (currentAudioUrl) { URL.revokeObjectURL(currentAudioUrl); currentAudioUrl = null; }
+        currentAudio = null;
+      };
+      await audio.play();
+      return;
+    }
+  } catch (err) {
+    // 网络或接口异常 → 走降级
   }
-  const isSpeakingThis = speakingBtn === btn && speechSynthesis.speaking;
   speak(text, btn);
-  if (isSpeakingThis) {
-    speechSynthesis.cancel();
-    btn.classList.remove('speaking');
-    speakingBtn = null;
-  }
 }
 
 // ASR：点击开始录音，转写结果填入输入框，用户确认后发送

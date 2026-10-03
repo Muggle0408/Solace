@@ -175,3 +175,18 @@ describe('满意度反馈', () => {
     assert.ok(Array.isArray(res.body.items));
   });
 });
+
+describe('语音合成', () => {
+  it('未配置火山 Key 时 TTS 返回 501（前端降级浏览器朗读）', async () => {
+    const res = await request(app)
+      .post('/api/tts')
+      .send({ text: '你好' })
+      .expect(501);
+    assert.strictEqual(res.body.error, 'TTS_NOT_CONFIGURED');
+  });
+
+  it('拒绝空文本或过长的文本', async () => {
+    await request(app).post('/api/tts').send({ text: '' }).expect(400);
+    await request(app).post('/api/tts').send({ text: '长'.repeat(501) }).expect(400);
+  });
+});
