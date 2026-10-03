@@ -39,8 +39,8 @@ const skyMat = new THREE.ShaderMaterial({
     varying vec2 vUv;
     void main(){
       vec3 top = vec3(1.0, 1.0, 1.0);
-      vec3 mid = vec3(0.82, 0.91, 1.0);
-      vec3 bot = vec3(0.62, 0.82, 1.0);
+      vec3 mid = vec3(0.68, 0.84, 1.0);
+      vec3 bot = vec3(0.38, 0.68, 0.96);
       vec3 c = mix(top, mid, smoothstep(0.0, 0.55, vUv.y));
       c = mix(c, bot, smoothstep(0.55, 1.0, vUv.y));
       gl_FragColor = vec4(c, 1.0);
@@ -106,11 +106,11 @@ const uniforms = {
   uTime: { value: 0 },
   uFlap: { value: 1.25 },   // 翅膀折叠角（弧度），大开≈0.12，合拢≈1.25
   uScatter: { value: 0.05 },// 粒子弥散程度
-  uSize: { value: 0.028 },
+  uSize: { value: 0.036 },
   uPixelRatio: { value: DPR },
   uColA: { value: new THREE.Color('#ffffff') },
-  uColB: { value: new THREE.Color('#bfe7ff') },
-  uColC: { value: new THREE.Color('#6fb9ff') }
+  uColB: { value: new THREE.Color('#9fd8ff') },
+  uColC: { value: new THREE.Color('#3f9df5') }
 };
 
 const mat = new THREE.ShaderMaterial({
@@ -192,9 +192,9 @@ function glowSprite(size, opacity) {
   sp.scale.setScalar(size);
   return sp;
 }
-const halo = glowSprite(7.5, 0.22);
+const halo = glowSprite(7.5, 0.32);
 group.add(halo);
-const core = glowSprite(2.2, 0.55);
+const core = glowSprite(2.4, 0.7);
 group.add(core);
 
 // ---------- 辉光合成 ----------
@@ -202,15 +202,15 @@ const composer = new EffectComposer(renderer);
 composer.setPixelRatio(DPR);
 composer.setSize(window.innerWidth, window.innerHeight);
 composer.addPass(new RenderPass(scene, camera));
-const bloom = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 0.75, 0.9, 0.32);
+const bloom = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 1.0, 0.9, 0.24);
 composer.addPass(bloom);
 composer.addPass(new OutputPass());
 
 // ---------- 状态机：合拢 ↔ 散开 ----------
 const easeInOutCubic = t => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
 const CONF = {
-  closedFlap: 1.25, closedFlapBreath: 0.045, closedScatter: 0.04,
-  openFlap: 0.12, openFlapAmp: 0.24, openFlapFast: 0.06, openScatter: 0.55,
+  closedFlap: 0.92, closedFlapBreath: 0.05, closedScatter: 0.04,
+  openFlap: 0.1, openFlapAmp: 0.26, openFlapFast: 0.06, openScatter: 0.55,
   durClosed: 5.0, durOpen: 7.0, durTrans: 1.6
 };
 let phase = 'closed';   // closed | toOpen | open | toClosed
@@ -319,3 +319,4 @@ if (reduced) {
 } else {
   tick();
 }
+console.log('[蝴蝶背景] 启动完成，粒子数', COUNT, '当前阶段', phase);
