@@ -278,10 +278,10 @@ function stopSpeaking() {
 }
 
 async function toggleSpeak(text, btn) {
-  const mySeq = ++speakSeq;
   const isSpeakingThis = speakingBtn === btn;
   stopSpeaking();
   if (isSpeakingThis) return; // 再点一次 = 停止
+  const mySeq = ++speakSeq;   // 必须在 stopSpeaking 之后取序号，否则新播放会被自己判为已取消
 
   btn.classList.add('speaking');
   btn.textContent = '⏳ 合成中…';
