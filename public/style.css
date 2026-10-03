@@ -289,29 +289,6 @@ body {
   background: url('bg.jpg') center / cover no-repeat;
 }
 
-/* 蝴蝶独立图层：从油画中抠出，JS 按 cover 定位对齐，CSS 微扇动 */
-.bg-butterfly {
-  position: absolute;
-  pointer-events: none;
-  will-change: transform;
-  transform-origin: 50% 46%;
-  filter: drop-shadow(0 0 18px rgba(255, 255, 255, 0.32));
-  animation: flutter 3.4s ease-in-out infinite;
-}
-
-/* 微微扇动：水平轻收=合翅感 + 轻微上浮 + 姿态摇摆（低刺激） */
-@keyframes flutter {
-  0%, 100% { transform: scale(1, 1) rotate(-1deg) translateY(0); }
-  28%      { transform: scale(0.94, 1.02) rotate(0.5deg) translateY(-4px); }
-  52%      { transform: scale(1, 1.03) rotate(1.1deg) translateY(-8px); }
-  76%      { transform: scale(0.95, 1.01) rotate(0.3deg) translateY(-3px); }
-}
-
-/* 系统开启"减少动态效果"时蝴蝶静止 */
-@media (prefers-reduced-motion: reduce) {
-  .bg-butterfly { animation: none !important; }
-}
-
 /* ============ UI 卡片化（浮于水彩之上） ============ */
 .app {
   position: relative;
