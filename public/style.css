@@ -280,67 +280,18 @@ body {
   .icon-btn { width: 40px; height: 40px; font-size: 16px; }
 }
 
-/* ============ 蓝紫水彩湿地背景场景 ============ */
-.bg-scene {
+/* ============ 背景：油画照片层 ============ */
+.bg-photo {
   position: fixed;
   inset: 0;
   z-index: 0;
   pointer-events: none;
-  overflow: hidden;
+  background: url('bg.jpg') center / cover no-repeat;
 }
 
-.scene-svg {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-}
-
-/* 发光蝴蝶：缓慢扇翅 + 悬浮漂移（低刺激） */
-.butterfly {
-  transform-box: fill-box;
-  animation: bFloat 7s ease-in-out infinite;
-}
-
-@keyframes bFloat {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-12px); }
-}
-
-.bwing {
-  transform-box: fill-box;
-  animation: flap 1.6s ease-in-out infinite alternate;
-}
-.bwing-l { transform-origin: 100% 50%; }
-.bwing-r { transform-origin: 0% 50%; animation-delay: .06s; }
-
-@keyframes flap {
-  from { transform: scaleX(1); }
-  to { transform: scaleX(.58); }
-}
-
-/* 雾中浮光 */
-.light-dot {
-  position: absolute;
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, .95);
-  box-shadow: 0 0 12px 4px rgba(255, 255, 255, .55);
-  opacity: 0;
-  animation: floatUp 9s ease-in-out infinite;
-}
-
-@keyframes floatUp {
-  0%   { transform: translateY(0); opacity: 0; }
-  25%  { opacity: .8; }
-  100% { transform: translateY(-46px); opacity: 0; }
-}
-
-/* 系统开启"减少动态效果"时全部静止 */
+/* 系统开启"减少动态效果"时隐藏浮光 */
 @media (prefers-reduced-motion: reduce) {
-  .butterfly, .bwing, .light-dot { animation: none !important; }
-  .light-dot { display: none; }
+  .light-dot { animation: none !important; display: none; }
 }
 
 /* ============ UI 卡片化（浮于水彩之上） ============ */
