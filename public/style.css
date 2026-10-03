@@ -6,7 +6,7 @@
 
 body {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  background: linear-gradient(180deg, #f8f4fb 0%, #f3ecf5 22%, #e9e9f7 42%, #d3def2 62%, #7ea9dd 74%, #2b5fa8 100%);
+  background: linear-gradient(180deg, #fdfeff 0%, #eef7ff 38%, #d8ecff 68%, #b9dfff 100%);
   color: #33415c;
   line-height: 1.6;
   min-height: 100vh;
@@ -280,13 +280,18 @@ body {
   .icon-btn { width: 40px; height: 40px; font-size: 16px; }
 }
 
-/* ============ 背景：油画照片层 ============ */
-.bg-photo {
+/* ============ 背景：3D 粒子蝴蝶画布 ============ */
+#bg3d {
   position: fixed;
   inset: 0;
   z-index: 0;
   pointer-events: none;
-  background: url('bg.jpg') center / cover no-repeat;
+}
+
+#bg-canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
 }
 
 /* 系统开启"减少动态效果"时隐藏浮光 */
