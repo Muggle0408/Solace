@@ -392,20 +392,3 @@ userInput.addEventListener('keypress', (e) => {
 
 // 初始化选项
 renderOptions(['焦虑', '委屈', '愤怒', '疲惫', '孤独', '其他']);
-
-// 背景蝴蝶图层：按 background:cover 数学对齐（窗口变化时重算）
-(function alignBgButterfly() {
-  const img = document.getElementById('bgButterfly');
-  if (!img) return;
-  const IW = 1920, IH = 1512;   // bg.jpg 尺寸
-  const BX = 420, BY = 660, BW = 1060;  // 蝴蝶在图中的位置（抠图参数）
-  function align() {
-    const vw = window.innerWidth, vh = window.innerHeight;
-    const s = Math.max(vw / IW, vh / IH);
-    img.style.left = ((vw - IW * s) / 2 + BX * s) + 'px';
-    img.style.top = ((vh - IH * s) / 2 + BY * s) + 'px';
-    img.style.width = (BW * s) + 'px';
-  }
-  window.addEventListener('resize', align);
-  align();
-})();
