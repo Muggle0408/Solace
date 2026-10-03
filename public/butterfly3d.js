@@ -291,6 +291,7 @@ window.addEventListener('resize', () => {
 // ---------- 主循环 ----------
 const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 const clock = new THREE.Clock();
+let firstFrameLogged = false;
 function tick() {
   const dt = Math.min(clock.getDelta(), 0.05);
   const t = clock.elapsedTime;
@@ -308,6 +309,10 @@ function tick() {
   camera.position.y = -my;
   camera.lookAt(0, 0, 0);
   composer.render();
+  if (!firstFrameLogged) {
+    firstFrameLogged = true;
+    console.log('[蝴蝶背景] 首帧已渲染，绘制调用', renderer.info.render.calls, '三角形', renderer.info.render.triangles);
+  }
   requestAnimationFrame(tick);
 }
 
@@ -320,3 +325,19 @@ if (reduced) {
   tick();
 }
 console.log('[蝴蝶背景] 启动完成，粒子数', COUNT, '当前阶段', phase);
+
+// 自检接口：Console 输入 __bf.info() 查看渲染器内部状态
+window.__bf = {
+  info() {
+    return {
+      绘制调用: renderer.info.render.calls,
+      三角形: renderer.info.render.triangles,
+      画布尺寸: canvas.width + 'x' + canvas.height,
+      当前阶段: phase,
+      翅膀角度: +uniforms.uFlap.value.toFixed(3),
+      粒子数: geo.instanceCount,
+      画布显示: getComputedStyle(canvas).width + ' / ' + getComputedStyle(canvas).height
+    };
+  },
+  renderer, scene, camera, uniforms
+};
