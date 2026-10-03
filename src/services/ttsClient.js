@@ -13,26 +13,37 @@ const VOLC_VOICE = process.env.VOLC_VOICE || 'zh_female_meilinvyou_uranus_bigtts
 const VOLC_RESOURCE = process.env.VOLC_RESOURCE || 'seed-tts-2.0';
 
 async function volcSynthesize(text) {
-  const res = await axios.post(
-    'https://openspeech.bytedance.com/api/v3/tts/unidirectional',
-    {
-      req_params: {
-        text,
-        speaker: VOLC_VOICE,
-        audio_params: { format: 'mp3', sample_rate: 24000 }
-      }
-    },
-    {
-      headers: {
-        'X-Api-Key': VOLC_API_KEY,
-        'X-Api-Resource-Id': VOLC_RESOURCE,
-        'X-Api-Request-Id': crypto.randomUUID(),
-        'Content-Type': 'application/json'
+  let res;
+  try {
+    res = await axios.post(
+      'https://openspeech.bytedance.com/api/v3/tts/unidirectional',
+      {
+        req_params: {
+          text,
+          speaker: VOLC_VOICE,
+          audio_params: { format: 'mp3', sample_rate: 24000 }
+        }
       },
-      timeout: 20000,
-      responseType: 'text'
+      {
+        headers: {
+          'X-Api-Key': VOLC_API_KEY,
+          'X-Api-Resource-Id': VOLC_RESOURCE,
+          'X-Api-Request-Id': crypto.randomUUID(),
+          'Content-Type': 'application/json'
+        },
+        timeout: 20000,
+        responseType: 'text'
+      }
+    );
+  } catch (err) {
+    if (err.response?.data) {
+      const detail = typeof err.response.data === 'string'
+        ? err.response.data.slice(0, 300)
+        : JSON.stringify(err.response.data).slice(0, 300);
+      throw new Error(`豆包TTS请求失败(${err.response.status}): ${detail}`);
     }
-  );
+    throw err;
+  }
 
   // 响应可能为单个 JSON 或多行 chunked JSON，统一解析并拼接音频数据
   const raw = res.data;
