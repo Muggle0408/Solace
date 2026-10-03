@@ -6,7 +6,7 @@
 
 body {
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
-  background: linear-gradient(180deg, #00ff00 0%, #00cc00 100%); /* 诊断用亮绿：判定画布是否真在渲染，勿长期保留 */
+  background: linear-gradient(180deg, #fdfeff 0%, #c9e6ff 45%, #8ec7f7 100%);
   color: #33415c;
   line-height: 1.6;
   min-height: 100vh;

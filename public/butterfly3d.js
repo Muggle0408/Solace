@@ -175,6 +175,16 @@ group.add(butterfly);
 group.scale.setScalar(1.55);
 scene.add(group);
 
+// 调试模式：URL 加 ?debug=1，粒子变为巨大红色不透明，用于定位不可见问题
+if (new URLSearchParams(location.search).has('debug')) {
+  uniforms.uSize.value = 0.3;
+  uniforms.uColA.value.set('#ff2200');
+  uniforms.uColB.value.set('#ff2200');
+  uniforms.uColC.value.set('#ff2200');
+  mat.blending = THREE.NormalBlending;
+  console.log('[蝴蝶背景] DEBUG 模式：巨大红色粒子');
+}
+
 // ---------- 中心光晕（精灵贴图，叠 Bloom 出电影感光斑） ----------
 function glowSprite(size, opacity) {
   const c = document.createElement('canvas');
