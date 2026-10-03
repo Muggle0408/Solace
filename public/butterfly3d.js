@@ -39,10 +39,12 @@ const skyMat = new THREE.ShaderMaterial({
     varying vec2 vUv;
     void main(){
       vec3 top = vec3(1.0, 1.0, 1.0);
-      vec3 mid = vec3(0.68, 0.84, 1.0);
-      vec3 bot = vec3(0.38, 0.68, 0.96);
-      vec3 c = mix(top, mid, smoothstep(0.0, 0.55, vUv.y));
-      c = mix(c, bot, smoothstep(0.55, 1.0, vUv.y));
+      vec3 m1  = vec3(0.78, 0.91, 1.0);
+      vec3 m2  = vec3(0.53, 0.81, 0.97);
+      vec3 bot = vec3(0.29, 0.64, 0.94);
+      vec3 c = mix(top, m1, smoothstep(0.0, 0.3, vUv.y));
+      c = mix(c, m2, smoothstep(0.3, 0.65, vUv.y));
+      c = mix(c, bot, smoothstep(0.65, 1.0, vUv.y));
       gl_FragColor = vec4(c, 1.0);
     }
   `
@@ -106,7 +108,7 @@ const uniforms = {
   uTime: { value: 0 },
   uFlap: { value: 1.25 },   // 翅膀折叠角（弧度），大开≈0.12，合拢≈1.25
   uScatter: { value: 0.05 },// 粒子弥散程度
-  uSize: { value: 0.036 },
+  uSize: { value: 0.05 },
   uPixelRatio: { value: DPR },
   uColA: { value: new THREE.Color('#ffffff') },
   uColB: { value: new THREE.Color('#9fd8ff') },
@@ -149,7 +151,7 @@ const mat = new THREE.ShaderMaterial({
       vec3 up = vec3(viewMatrix[0][1], viewMatrix[1][1], viewMatrix[2][1]);
       mv.xyz += (right * position.x + up * position.y) * size;
       vMix = aRand.z;
-      vFade = 0.7 + 0.3 * sin(uTime * (1.3 + seed) + seed * 20.0);
+      vFade = 0.85 + 0.15 * sin(uTime * (1.3 + seed) + seed * 20.0);
       gl_Position = projectionMatrix * mv;
     }
   `,
@@ -212,7 +214,7 @@ const composer = new EffectComposer(renderer);
 composer.setPixelRatio(DPR);
 composer.setSize(window.innerWidth, window.innerHeight);
 composer.addPass(new RenderPass(scene, camera));
-const bloom = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 1.0, 0.9, 0.24);
+const bloom = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 1.1, 0.9, 0.22);
 composer.addPass(bloom);
 composer.addPass(new OutputPass());
 
