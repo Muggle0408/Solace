@@ -6,7 +6,8 @@ import * as THREE from 'three';
 import { EffectComposer } from 'three/addons/postprocessing/EffectComposer.js';
 import { RenderPass } from 'three/addons/postprocessing/RenderPass.js';
 import { UnrealBloomPass } from 'three/addons/postprocessing/UnrealBloomPass.js';
-import { OutputPass } from 'three/addons/postprocessing/OutputPass.js';
+// 注意：不使用 OutputPass——它会做线性→sRGB 伽马变换，把我们精心调的颜色统一提亮 wash 掉；
+// 直出管线让着色器颜色原样呈现。
 
 const container = document.getElementById('bg3d');
 const canvas = document.getElementById('bg-canvas');
@@ -39,9 +40,9 @@ const skyMat = new THREE.ShaderMaterial({
     varying vec2 vUv;
     void main(){
       vec3 top = vec3(1.0, 1.0, 1.0);
-      vec3 m1  = vec3(0.78, 0.91, 1.0);
-      vec3 m2  = vec3(0.53, 0.81, 0.97);
-      vec3 bot = vec3(0.29, 0.64, 0.94);
+      vec3 m1  = vec3(0.72, 0.88, 1.0);
+      vec3 m2  = vec3(0.42, 0.72, 0.97);
+      vec3 bot = vec3(0.16, 0.5, 0.9);
       vec3 c = mix(top, m1, smoothstep(0.0, 0.3, vUv.y));
       c = mix(c, m2, smoothstep(0.3, 0.65, vUv.y));
       c = mix(c, bot, smoothstep(0.65, 1.0, vUv.y));
@@ -216,7 +217,6 @@ composer.setSize(window.innerWidth, window.innerHeight);
 composer.addPass(new RenderPass(scene, camera));
 const bloom = new UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 1.1, 0.9, 0.22);
 composer.addPass(bloom);
-composer.addPass(new OutputPass());
 
 // ---------- 状态机：合拢 ↔ 散开 ----------
 const easeInOutCubic = t => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
