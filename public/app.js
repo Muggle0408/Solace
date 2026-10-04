@@ -363,7 +363,16 @@ function startRecording() {
   recognition.onend = () => setRecordingState(false);
   recognition.onerror = (e) => {
     setRecordingState(false);
-    if (e.error === 'not-allowed') addSystemNote('麦克风权限被拒绝了，请在浏览器设置中允许后重试。');
+    console.warn('[ASR] 语音识别错误:', e.error);
+    if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
+      addSystemNote('麦克风权限被拒绝了，请在浏览器设置中允许后重试。');
+    } else if (e.error === 'network') {
+      addSystemNote('语音服务网络异常，请检查网络后重试。');
+    } else if (e.error === 'audio-capture') {
+      addSystemNote('麦克风被其他应用占用（可能有音乐在播放），请先静音音乐再试。');
+    } else if (e.error !== 'aborted') {
+      addSystemNote('语音输入出错了，请再点一次试试。');
+    }
   };
 
   setRecordingState(true);
@@ -408,16 +417,16 @@ const BGM_LIST = [
 const bgmListEl = document.getElementById('bgmList');
 let bgmAudio = null;
 let bgmCurrentId = null;
-let bgmFadeTimer = null;
 
+// 每个音频元素独立的淡变定时器——避免切换时旧音乐的淡出被新音乐的淡入覆盖
 function bgmFade(audio, target, done) {
-  clearInterval(bgmFadeTimer);
-  bgmFadeTimer = setInterval(() => {
+  clearInterval(audio._fadeT);
+  audio._fadeT = setInterval(() => {
     const v = audio.volume + Math.sign(target - audio.volume) * 0.04;
     audio.volume = Math.max(0, Math.min(1, v));
     if (Math.abs(audio.volume - target) <= 0.05) {
       audio.volume = target;
-      clearInterval(bgmFadeTimer);
+      clearInterval(audio._fadeT);
       if (done) done();
     }
   }, 60);
