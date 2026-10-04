@@ -10,6 +10,8 @@ let startRating = null;
 let endRating = null;
 let history = []; // 对话历史，后端从中恢复当前阶段
 let isProcessing = false; // 防止重复提交
+let currentUser = null;   // 登录用户 {id, username, nickname}；游客为 null
+let currentConvId = null; // 服务端会话 id（登录后生效）；游客为 null
 
 let sessionRecord = {
   id: Date.now(),
@@ -33,7 +35,8 @@ function getCurrentStage() {
   return 'welcome';
 }
 
-function addMessage(text, sender, stage = null) {
+// opts.silent：恢复历史时不自动朗读；dbId：服务端消息 id（登录后反馈落库用）
+function addMessage(text, sender, stage = null, dbId = null, opts = {}) {
   const msgDiv = document.createElement('div');
   msgDiv.className = `message ${sender}`;
   const bubble = document.createElement('div');
@@ -57,11 +60,11 @@ function addMessage(text, sender, stage = null) {
     });
     actions.appendChild(ttsBtn);
 
-    actions.appendChild(buildFeedbackBar(text, stage));
+    actions.appendChild(buildFeedbackBar(text, stage, dbId));
     msgDiv.appendChild(actions);
 
-    // 自动播放：新回复到达即朗读（点播放图标可停止/重播；新回复会自然打断上一条）
-    toggleSpeak(text, ttsBtn);
+    // 自动播放：新回复到达即朗读（恢复历史除外；点播放图标可停止/重播）
+    if (!opts.silent) toggleSpeak(text, ttsBtn);
   }
 
   chatContainer.appendChild(msgDiv);
@@ -70,6 +73,7 @@ function addMessage(text, sender, stage = null) {
   // 同时更新对话历史和后端会话记录
   const record = { role: sender, content: text, time: new Date().toISOString() };
   if (stage) record.stage = stage;
+  if (dbId) record.dbId = dbId;
   history.push(record);
 
   sessionRecord.messages.push({ sender, text, time: new Date().toISOString() });
@@ -87,11 +91,12 @@ function addSystemNote(text) {
 const FB_REASONS = ['不贴合我的情况', '太敷衍', '语气不舒服', '其他'];
 let fbToastShown = false;
 
-function buildFeedbackBar(text, stage) {
+// dbId：登录后由服务端返回的消息 id，反馈直落 messages.vote；游客传 null，仅写 JSONL
+function buildFeedbackBar(text, stage, dbId = null) {
   const wrap = document.createElement('div');
   wrap.className = 'fb-group';
 
-  const messageId = 'm' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+  const messageId = dbId || ('m' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7));
   let vote = null;
 
   const up = document.createElement('button');
@@ -187,10 +192,16 @@ async function handleUserMessage(text) {
   userInput.value = '';
 
   try {
+    const headers = { 'Content-Type': 'application/json' };
+    if (currentConvId) headers['X-Conv-Id'] = currentConvId;
+    const payload = { message: text, history };
+    if (startRating !== null) payload.startRating = startRating;
+    if (endRating !== null) payload.endRating = endRating;
+
     const res = await fetch('/api/chat', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message: text, history })
+      headers,
+      body: JSON.stringify(payload)
     });
     const data = await res.json();
 
@@ -198,7 +209,8 @@ async function handleUserMessage(text) {
       showCrisisBanner();
     }
 
-    addMessage(data.text, 'bot', data.stage);
+    if (data.convId) currentConvId = data.convId;
+    addMessage(data.text, 'bot', data.stage, data.botMessageId || null);
     renderOptions(data.options);
 
     if (data.stage === 'end') {
@@ -227,7 +239,7 @@ function saveSession() {
   if (stored.length > 30) stored.shift();
   localStorage.setItem('emotion_history', JSON.stringify(stored));
 
-  addSystemNote('本次记录已保存到本地。');
+  addSystemNote(currentUser ? '本次记录已保存到你的账号。' : '本次记录已保存到本地。');
 }
 
 // ---------- 语音能力：ASR 输入 + TTS 播报（浏览器原生，无额外依赖） ----------
@@ -470,3 +482,224 @@ if (bgmListEl) {
   if (saved) document.querySelectorAll('.bgm-item').forEach(b =>
     b.classList.toggle('active', b.dataset.id === saved));
 }
+
+// ---------- 账号系统：登录/注册弹层 + 历史会话恢复（游客模式不受影响） ----------
+
+const authBtn = document.getElementById('authBtn');
+const logoutBtn = document.getElementById('logoutBtn');
+const userNick = document.getElementById('userNick');
+const historyBtn = document.getElementById('historyBtn');
+const newConvBtn = document.getElementById('newConvBtn');
+const authBanner = document.getElementById('authBanner');
+const bannerAuthBtn = document.getElementById('bannerAuthBtn');
+const bannerClose = document.getElementById('bannerClose');
+const authModal = document.getElementById('authModal');
+const tabLogin = document.getElementById('tabLogin');
+const tabRegister = document.getElementById('tabRegister');
+const authForm = document.getElementById('authForm');
+const authUsername = document.getElementById('authUsername');
+const authNickname = document.getElementById('authNickname');
+const nicknameField = document.getElementById('nicknameField');
+const authPassword = document.getElementById('authPassword');
+const authError = document.getElementById('authError');
+const authSubmit = document.getElementById('authSubmit');
+const historyPanel = document.getElementById('historyPanel');
+const historyList = document.getElementById('historyList');
+const historyClose = document.getElementById('historyClose');
+
+let authMode = 'login'; // 'login' | 'register'
+
+function updateAuthBanner() {
+  const dismissed = localStorage.getItem('authBannerDismissed') === '1';
+  authBanner.classList.toggle('hidden', !!currentUser || dismissed);
+}
+
+function updateAuthUI() {
+  const loggedIn = !!currentUser;
+  authBtn.classList.toggle('hidden', loggedIn);
+  logoutBtn.classList.toggle('hidden', !loggedIn);
+  userNick.classList.toggle('hidden', !loggedIn);
+  historyBtn.classList.toggle('hidden', !loggedIn);
+  newConvBtn.classList.toggle('hidden', !loggedIn);
+  if (loggedIn) userNick.textContent = currentUser.nickname || currentUser.username;
+  updateAuthBanner();
+}
+
+function switchAuthMode(mode) {
+  authMode = mode;
+  const isLogin = mode === 'login';
+  tabLogin.classList.toggle('active', isLogin);
+  tabRegister.classList.toggle('active', !isLogin);
+  nicknameField.style.display = isLogin ? 'none' : '';
+  authSubmit.textContent = isLogin ? '登录' : '注册并登录';
+  authPassword.autocomplete = isLogin ? 'current-password' : 'new-password';
+  authError.classList.add('hidden');
+}
+
+function openAuthModal() {
+  switchAuthMode(authMode);
+  authModal.classList.remove('hidden');
+  setTimeout(() => authUsername.focus(), 50);
+}
+
+function closeAuthModal() {
+  authModal.classList.add('hidden');
+  authForm.reset();
+  authError.classList.add('hidden');
+}
+
+// 加载指定会话到聊天区（silent：不自动朗读）
+async function loadConversation(convId, meta = {}) {
+  const res = await fetch(`/api/conversations/${convId}/messages`);
+  if (!res.ok) {
+    addSystemNote('这条记录暂时打不开了。');
+    return;
+  }
+  const { messages } = await res.json();
+
+  chatContainer.innerHTML = '';
+  history = [];
+  currentConvId = convId;
+  startRating = meta.startRating ?? null;
+  endRating = meta.endRating ?? null;
+
+  for (const m of messages) {
+    addMessage(m.content, m.role, m.stage, m.role === 'bot' ? m.id : null, { silent: true });
+  }
+  renderOptions([]);
+}
+
+// 回到初始状态，开始新对话
+function startNewConversation() {
+  chatContainer.innerHTML = '';
+  history = [];
+  currentConvId = null;
+  startRating = null;
+  endRating = null;
+  sessionRecord = { id: Date.now(), date: new Date().toISOString(), messages: [], insight: '' };
+  addMessage('嗨，欢迎来到情绪空间。你现在感觉怎么样？可以用一句话说说此刻最强烈的情绪。',
+    'bot', null, null, { silent: true });
+  renderOptions(['焦虑', '委屈', '愤怒', '疲惫', '孤独', '其他']);
+}
+
+// 登录后恢复最近一条会话
+async function restoreLatestConversation() {
+  try {
+    const res = await fetch('/api/conversations');
+    if (!res.ok) return;
+    const { conversations } = await res.json();
+    if (conversations.length > 0) {
+      await loadConversation(conversations[0].id, conversations[0]);
+    } else {
+      startNewConversation();
+    }
+  } catch { /* 网络异常时保持现状，不打扰用户 */ }
+}
+
+async function openHistoryPanel() {
+  try {
+    const res = await fetch('/api/conversations');
+    if (!res.ok) return;
+    const { conversations } = await res.json();
+    historyList.innerHTML = '';
+    if (conversations.length === 0) {
+      historyList.innerHTML = '<div class="history-empty">最近 30 天还没有对话记录</div>';
+    }
+    conversations.forEach((c) => {
+      const item = document.createElement('button');
+      item.type = 'button';
+      item.className = 'history-item' + (c.id === currentConvId ? ' active' : '');
+      const when = (c.startedAt || '').replace('T', ' ').slice(5, 16);
+      item.innerHTML =
+        `<span class="history-date">${when}</span>` +
+        `<span class="history-preview">${c.preview || '（暂无内容）'}</span>` +
+        `<span class="history-count">${c.msgCount} 条</span>`;
+      item.addEventListener('click', async () => {
+        historyPanel.classList.add('hidden');
+        await loadConversation(c.id, c);
+      });
+      historyList.appendChild(item);
+    });
+    historyPanel.classList.remove('hidden');
+  } catch { /* 静默 */ }
+}
+
+authBtn.addEventListener('click', openAuthModal);
+bannerAuthBtn.addEventListener('click', openAuthModal);
+bannerClose.addEventListener('click', () => {
+  localStorage.setItem('authBannerDismissed', '1');
+  updateAuthBanner();
+});
+tabLogin.addEventListener('click', () => switchAuthMode('login'));
+tabRegister.addEventListener('click', () => switchAuthMode('register'));
+historyBtn.addEventListener('click', openHistoryPanel);
+historyClose.addEventListener('click', () => historyPanel.classList.add('hidden'));
+newConvBtn.addEventListener('click', () => {
+  startNewConversation();
+  addSystemNote('已开始一段新的对话。');
+});
+
+// 点击遮罩空白处关闭弹层
+authModal.addEventListener('click', (e) => { if (e.target === authModal) closeAuthModal(); });
+historyPanel.addEventListener('click', (e) => { if (e.target === historyPanel) historyPanel.classList.add('hidden'); });
+
+authForm.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  authError.classList.add('hidden');
+  authSubmit.disabled = true;
+
+  const body = {
+    username: authUsername.value.trim(),
+    password: authPassword.value
+  };
+  if (authMode === 'register') body.nickname = authNickname.value.trim();
+
+  try {
+    const res = await fetch(`/api/auth/${authMode}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body)
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      authError.textContent = data.message || '操作失败，请稍后再试。';
+      authError.classList.remove('hidden');
+      return;
+    }
+    currentUser = data.user;
+    closeAuthModal();
+    updateAuthUI();
+    await restoreLatestConversation();
+    addSystemNote(authMode === 'register'
+      ? `注册成功，欢迎你，${currentUser.nickname || currentUser.username}。`
+      : `欢迎回来，${currentUser.nickname || currentUser.username}。`);
+  } catch {
+    authError.textContent = '网络异常，请稍后再试。';
+    authError.classList.remove('hidden');
+  } finally {
+    authSubmit.disabled = false;
+  }
+});
+
+logoutBtn.addEventListener('click', async () => {
+  try { await fetch('/api/auth/logout', { method: 'POST' }); } catch { /* 静默 */ }
+  currentUser = null;
+  currentConvId = null;
+  updateAuthUI();
+  startNewConversation();
+  addSystemNote('已退出登录。之前的账号记录仍保留，随时登录可继续。');
+});
+
+// 启动时恢复登录态
+(async function initAuth() {
+  try {
+    const res = await fetch('/api/auth/me');
+    if (res.ok) {
+      currentUser = (await res.json()).user;
+      updateAuthUI();
+      await restoreLatestConversation();
+      return;
+    }
+  } catch { /* 网络异常按游客处理 */ }
+  updateAuthUI();
+})();

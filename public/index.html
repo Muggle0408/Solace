@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>情绪空间 · 高敏感人群情绪疏导</title>
-  <link rel="stylesheet" href="style.css?v=20261022">
+  <link rel="stylesheet" href="style.css?v=20261025">
 </head>
 <body>
   <!-- 背景：油画风白蓝幕布（上白下蓝自然过渡，带油画颗粒）；透明底蝴蝶素材待接入 -->
@@ -20,7 +20,20 @@
     <header class="header">
       <h1>情绪空间</h1>
       <p class="subtitle">一个给高敏感人群的安全角落</p>
+      <div class="header-actions" id="headerActions">
+        <button id="historyBtn" class="header-btn hidden" title="查看最近 30 天的对话记录">历史</button>
+        <button id="newConvBtn" class="header-btn hidden" title="开始一段新的对话">新对话</button>
+        <span id="userNick" class="user-nick hidden"></span>
+        <button id="authBtn" class="header-btn">登录 / 注册</button>
+        <button id="logoutBtn" class="header-btn hidden">退出</button>
+      </div>
     </header>
+
+    <div class="auth-banner hidden" id="authBanner">
+      <span>登录后可以保留对话与记忆，换设备也能继续。</span>
+      <button id="bannerAuthBtn" class="header-btn">登录 / 注册</button>
+      <button class="banner-close" id="bannerClose" title="知道了">×</button>
+    </div>
 
     <main class="chat-container" id="chatContainer">
       <div class="message bot">
@@ -43,6 +56,43 @@
     </div>
   </div>
 
-  <script src="app.js?v=20261024"></script>
+  <!-- 登录/注册弹层 -->
+  <div class="modal-mask hidden" id="authModal">
+    <div class="modal-card" role="dialog" aria-label="登录或注册">
+      <div class="modal-tabs">
+        <button class="modal-tab active" id="tabLogin" type="button">登录</button>
+        <button class="modal-tab" id="tabRegister" type="button">注册</button>
+      </div>
+      <form id="authForm" novalidate>
+        <label class="form-field">
+          <span>用户名</span>
+          <input type="text" id="authUsername" maxlength="20" autocomplete="username" placeholder="3-20 位字母、数字或下划线">
+        </label>
+        <label class="form-field" id="nicknameField" style="display:none">
+          <span>昵称（选填）</span>
+          <input type="text" id="authNickname" maxlength="20" placeholder="怎么称呼你">
+        </label>
+        <label class="form-field">
+          <span>密码</span>
+          <input type="password" id="authPassword" maxlength="64" autocomplete="current-password" placeholder="6-64 位">
+        </label>
+        <div class="form-error hidden" id="authError"></div>
+        <button type="submit" class="form-submit" id="authSubmit">登录</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- 历史会话列表弹层 -->
+  <div class="modal-mask hidden" id="historyPanel">
+    <div class="modal-card" role="dialog" aria-label="历史会话">
+      <div class="modal-title-row">
+        <span class="modal-title">最近 30 天的对话</span>
+        <button class="banner-close" id="historyClose" title="关闭">×</button>
+      </div>
+      <div class="history-list" id="historyList"></div>
+    </div>
+  </div>
+
+  <script src="app.js?v=20261025"></script>
 </body>
 </html>

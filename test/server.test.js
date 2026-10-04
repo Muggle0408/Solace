@@ -2,8 +2,12 @@
 process.env.USE_LLM = 'false';
 // 关闭限流，避免高频测试请求被拦截
 process.env.RATE_LIMIT_MAX = '0';
+// 认证接口同样关闭限流
+process.env.AUTH_RATE_LIMIT_MAX = '0';
 // 反馈数据写入临时目录，不污染仓库
 process.env.FEEDBACK_FILE = require('path').join(require('os').tmpdir(), `fb-test-${Date.now()}.jsonl`);
+// 数据库使用临时文件，不污染 data/solace.db
+process.env.DB_PATH = require('path').join(require('os').tmpdir(), `solace-test-${Date.now()}.db`);
 
 const { describe, it } = require('node:test');
 const assert = require('node:assert');
@@ -188,5 +192,131 @@ describe('语音合成', () => {
   it('拒绝空文本或过长的文本', async () => {
     await request(app).post('/api/tts').send({ text: '' }).expect(400);
     await request(app).post('/api/tts').send({ text: '长'.repeat(501) }).expect(400);
+  });
+});
+
+describe('账号系统', () => {
+  const uniqueName = () => `user_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
+
+  it('注册成功：返回用户并建立会话（me 可识别）', async () => {
+    const agent = request.agent(app);
+    const res = await agent.post('/api/auth/register')
+      .send({ username: uniqueName(), password: 'secret123', nickname: '测试员' })
+      .expect(201);
+    assert.ok(res.body.user.id);
+    assert.strictEqual(res.body.user.nickname, '测试员');
+
+    const me = await agent.get('/api/auth/me').expect(200);
+    assert.strictEqual(me.body.user.nickname, '测试员');
+  });
+
+  it('拒绝非法用户名与过短密码', async () => {
+    await request(app).post('/api/auth/register')
+      .send({ username: 'a!', password: 'secret123' }).expect(400);
+    await request(app).post('/api/auth/register')
+      .send({ username: 'valid_name', password: '123' }).expect(400);
+  });
+
+  it('重复用户名返回 409', async () => {
+    const name = uniqueName();
+    await request(app).post('/api/auth/register').send({ username: name, password: 'secret123' }).expect(201);
+    await request(app).post('/api/auth/register').send({ username: name, password: 'secret123' }).expect(409);
+  });
+
+  it('密码错误返回 401，登录成功返回用户', async () => {
+    const name = uniqueName();
+    await request(app).post('/api/auth/register').send({ username: name, password: 'secret123' }).expect(201);
+
+    await request(app).post('/api/auth/login')
+      .send({ username: name, password: 'wrongpass' }).expect(401);
+
+    const agent = request.agent(app);
+    const res = await agent.post('/api/auth/login')
+      .send({ username: name, password: 'secret123' }).expect(200);
+    assert.strictEqual(res.body.user.username, name);
+  });
+
+  it('退出后会话失效', async () => {
+    const agent = request.agent(app);
+    await agent.post('/api/auth/register').send({ username: uniqueName(), password: 'secret123' }).expect(201);
+    await agent.post('/api/auth/logout').expect(200);
+    await agent.get('/api/auth/me').expect(401);
+  });
+
+  it('未登录访问历史接口返回 401', async () => {
+    await request(app).get('/api/conversations').expect(401);
+  });
+});
+
+describe('对话落库与历史恢复', () => {
+  it('登录用户对话写入 messages，可用 X-Conv-Id 延续同一会话', async () => {
+    const agent = request.agent(app);
+    await agent.post('/api/auth/register')
+      .send({ username: `conv_${Date.now().toString(36)}`, password: 'secret123' }).expect(201);
+
+    const r1 = await agent.post('/api/chat').send({ message: '焦虑', history: [] }).expect(200);
+    assert.ok(Number.isInteger(r1.body.convId));
+    assert.ok(Number.isInteger(r1.body.botMessageId));
+
+    const r2 = await agent.post('/api/chat')
+      .set('X-Conv-Id', String(r1.body.convId))
+      .send({ message: '胸口发紧', history: [{ role: 'bot', content: '...', stage: 'check_in' }], startRating: 6 })
+      .expect(200);
+    assert.strictEqual(r2.body.convId, r1.body.convId);
+
+    const msgs = await agent.get(`/api/conversations/${r1.body.convId}/messages`).expect(200);
+    assert.strictEqual(msgs.body.messages.length, 4);
+    assert.deepStrictEqual(msgs.body.messages.map(m => m.role), ['user', 'bot', 'user', 'bot']);
+
+    const list = await agent.get('/api/conversations').expect(200);
+    const conv = list.body.conversations.find(c => c.id === r1.body.convId);
+    assert.ok(conv);
+    assert.strictEqual(conv.startRating, 6);
+    assert.strictEqual(conv.msgCount, 4);
+  });
+
+  it('他人会话 id 不会串号：自动开新会话', async () => {
+    const name = `own_${Date.now().toString(36)}`;
+    const agentA = request.agent(app);
+    await agentA.post('/api/auth/register').send({ username: name, password: 'secret123' }).expect(201);
+    const r1 = await agentA.post('/api/chat').send({ message: '焦虑', history: [] }).expect(200);
+
+    const agentB = request.agent(app);
+    await agentB.post('/api/auth/register').send({ username: `${name}b`, password: 'secret123' }).expect(201);
+    const r2 = await agentB.post('/api/chat')
+      .set('X-Conv-Id', String(r1.body.convId))
+      .send({ message: '焦虑', history: [] })
+      .expect(200);
+    assert.notStrictEqual(r2.body.convId, r1.body.convId);
+    await agentB.get(`/api/conversations/${r1.body.convId}/messages`).expect(404);
+  });
+
+  it('游客对话不落库（响应无 convId）', async () => {
+    const res = await request(app).post('/api/chat').send({ message: '焦虑', history: [] }).expect(200);
+    assert.strictEqual('convId' in res.body, false);
+  });
+
+  it('👍/👎 反馈写入 messages.vote（同时保留 JSONL）', async () => {
+    const agent = request.agent(app);
+    await agent.post('/api/auth/register')
+      .send({ username: `fb_${Date.now().toString(36)}`, password: 'secret123' }).expect(201);
+    const chat = await agent.post('/api/chat').send({ message: '焦虑', history: [] }).expect(200);
+
+    const res = await agent.post('/api/feedback')
+      .send({ messageId: chat.body.botMessageId, stage: 'check_in', vote: 'down', reason: '太敷衍' })
+      .expect(200);
+    assert.strictEqual(res.body.persistedToDb, true);
+
+    const db = require('../src/services/db');
+    const row = db.prepare('SELECT vote, vote_reason FROM messages WHERE id = ?').get(chat.body.botMessageId);
+    assert.strictEqual(row.vote, 'down');
+    assert.strictEqual(row.vote_reason, '太敷衍');
+  });
+
+  it('游客的反馈（非数字 messageId）仅写 JSONL 不报错', async () => {
+    const res = await request(app).post('/api/feedback')
+      .send({ messageId: 'mguest123', stage: 'check_in', vote: 'up' })
+      .expect(200);
+    assert.strictEqual(res.body.persistedToDb, false);
   });
 });
