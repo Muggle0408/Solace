@@ -395,47 +395,74 @@ body {
 /* ============ 通用隐藏 ============ */
 .hidden { display: none !important; }
 
-/* ============ 账号系统 ============ */
-.header {
-  position: relative;
-}
-
-.header-actions {
-  position: absolute;
-  right: 14px;
-  top: 14px;
+/* ============ 账号系统：右上角动物头像 + 下拉菜单 ============ */
+.account-area {
+  position: fixed;
+  right: 16px;
+  top: 16px;
+  z-index: 3;
   display: flex;
-  align-items: center;
+  flex-direction: column;
+  align-items: flex-end;
   gap: 8px;
 }
 
-.header-btn {
-  border: 1px solid #c3d2e8;
-  background: rgba(255, 255, 255, .78);
-  color: #3c4f6e;
-  padding: 5px 12px;
-  border-radius: 16px;
-  font-size: 13px;
+.avatar-btn {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  border: 1.5px solid rgba(195, 210, 232, .9);
+  background: rgba(255, 255, 255, .85);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  box-shadow: 0 6px 20px rgba(74, 104, 156, .18);
+  font-size: 24px;
   cursor: pointer;
   transition: all .2s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
-.header-btn:hover { background: #fff; border-color: #7d90ad; }
+.avatar-btn:hover {
+  background: #fff;
+  border-color: #7d90ad;
+  transform: scale(1.05);
+}
 
-.user-nick {
-  font-size: 13px;
+.account-menu {
+  min-width: 168px;
+  background: rgba(255, 255, 255, .95);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(195, 210, 232, .9);
+  border-radius: 16px;
+  box-shadow: 0 10px 32px rgba(51, 65, 92, .22);
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.account-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  border: none;
+  background: none;
+  padding: 9px 12px;
+  border-radius: 12px;
+  font-size: 14px;
   color: #3c4f6e;
-  font-weight: 600;
-  max-width: 96px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  cursor: pointer;
+  text-align: left;
+  transition: background .15s;
 }
 
-@media (max-width: 480px) {
-  .header-actions { right: 10px; top: 10px; gap: 6px; }
-  .header-btn { padding: 4px 9px; font-size: 12px; }
-}
+.account-menu-item:hover { background: rgba(232, 243, 255, .9); }
+
+.menu-icon { font-size: 15px; width: 20px; text-align: center; }
 
 /* 未登录横幅：柔和提示 */
 .auth-banner {
@@ -455,6 +482,19 @@ body {
   color: #6d7f99;
 }
 
+.header-btn {
+  border: 1px solid #c3d2e8;
+  background: rgba(255, 255, 255, .78);
+  color: #3c4f6e;
+  padding: 5px 12px;
+  border-radius: 16px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all .2s;
+}
+
+.header-btn:hover { background: #fff; border-color: #7d90ad; }
+
 .banner-close {
   border: none;
   background: none;
@@ -468,7 +508,7 @@ body {
 
 .banner-close:hover { color: #3c4f6e; background: rgba(255, 255, 255, .9); }
 
-/* 弹层（登录/注册 + 历史会话共用） */
+/* 弹层（登录 / 个人中心 / 对话管理共用） */
 .modal-mask {
   position: fixed;
   inset: 0;
@@ -493,28 +533,23 @@ body {
   padding: 22px;
 }
 
-.modal-tabs {
+.modal-title-row {
   display: flex;
-  gap: 8px;
-  margin-bottom: 18px;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
 }
 
-.modal-tab {
-  flex: 1;
-  border: 1px solid #c3d2e8;
-  background: rgba(255, 255, 255, .78);
-  color: #6d7f99;
-  padding: 8px 0;
-  border-radius: 14px;
-  font-size: 14px;
-  cursor: pointer;
-  transition: all .2s;
+.modal-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #3c4f6e;
 }
 
-.modal-tab.active {
-  background: #4a678f;
-  border-color: #4a678f;
-  color: #fff;
+.modal-sub {
+  font-size: 13px;
+  color: #8496ad;
+  margin-bottom: 16px;
 }
 
 .form-field {
@@ -540,6 +575,39 @@ body {
 
 .form-field input:focus { border-color: #7d90ad; }
 
+.code-row {
+  display: flex;
+  gap: 8px;
+}
+
+.code-row input { flex: 1; }
+
+.code-btn {
+  flex-shrink: 0;
+  border: 1px solid #c3d2e8;
+  background: rgba(255, 255, 255, .78);
+  color: #3c4f6e;
+  border-radius: 14px;
+  padding: 0 14px;
+  font-size: 13px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all .2s;
+}
+
+.code-btn:hover:not(:disabled) { background: #fff; border-color: #7d90ad; }
+.code-btn:disabled { opacity: .55; cursor: not-allowed; }
+
+.dev-hint {
+  background: #f0f7ff;
+  color: #4a678f;
+  border: 1px dashed #a9c4e4;
+  border-radius: 12px;
+  padding: 9px 12px;
+  font-size: 12px;
+  margin-bottom: 12px;
+}
+
 .form-error {
   background: #fff3f3;
   color: #8a3a3a;
@@ -564,20 +632,41 @@ body {
 .form-submit:hover { background: #3d5680; }
 .form-submit:disabled { opacity: .6; cursor: not-allowed; }
 
-.modal-title-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
+/* 个人中心 */
+.profile-phone {
+  font-size: 13px;
+  color: #8496ad;
   margin-bottom: 14px;
 }
 
-.modal-title {
-  font-size: 15px;
-  font-weight: 600;
-  color: #3c4f6e;
+.avatar-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 8px;
 }
 
-/* 历史会话列表 */
+.avatar-option {
+  aspect-ratio: 1;
+  border: 1.5px solid #c3d2e8;
+  background: rgba(255, 255, 255, .78);
+  border-radius: 14px;
+  font-size: 24px;
+  cursor: pointer;
+  transition: all .15s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.avatar-option:hover { background: #fff; border-color: #7d90ad; }
+
+.avatar-option.selected {
+  border-color: #4a678f;
+  background: #e8f3ff;
+  box-shadow: 0 0 0 3px rgba(74, 103, 143, .15);
+}
+
+/* 对话管理列表 */
 .history-list {
   display: flex;
   flex-direction: column;

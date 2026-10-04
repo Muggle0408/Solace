@@ -8,6 +8,13 @@ process.env.AUTH_RATE_LIMIT_MAX = '0';
 process.env.FEEDBACK_FILE = require('path').join(require('os').tmpdir(), `fb-test-${Date.now()}.jsonl`);
 // 数据库使用临时文件，不污染 data/solace.db
 process.env.DB_PATH = require('path').join(require('os').tmpdir(), `solace-test-${Date.now()}.db`);
+// 短信强制走模拟模式（不依赖真实密钥），重发冷却缩到 1 秒便于测试
+process.env.TENCENT_SMS_SECRET_ID = '';
+process.env.TENCENT_SMS_SECRET_KEY = '';
+process.env.TENCENT_SMS_SDK_APP_ID = '';
+process.env.TENCENT_SMS_SIGN_NAME = '';
+process.env.TENCENT_SMS_TEMPLATE_ID = '';
+process.env.SMS_RESEND_COOLDOWN_SEC = '1';
 
 const { describe, it } = require('node:test');
 const assert = require('node:assert');
@@ -16,6 +23,17 @@ const { app } = require('../server');
 const { detectCrisis } = require('../src/services/crisisDetector');
 const ruleResponder = require('../src/engine/ruleResponder');
 const { getCurrentStage, isValidTransition } = require('../src/config/stages');
+
+// 测试工具：唯一手机号 + 验证码一键登录（SMS 模拟模式）
+function uniquePhone() {
+  return '13' + String(Math.floor(Math.random() * 900000000) + 100000000);
+}
+async function smsLogin(agent, phone = uniquePhone()) {
+  const r = await agent.post('/api/auth/sms/request').send({ phone }).expect(200);
+  assert.strictEqual(r.body.mock, true);
+  const res = await agent.post('/api/auth/sms/login').send({ phone, code: r.body.devCode }).expect(200);
+  return res.body;
+}
 
 describe('健康检查', () => {
   it('GET /api/health 返回服务状态和 LLM 模式', async () => {
@@ -195,52 +213,83 @@ describe('语音合成', () => {
   });
 });
 
-describe('账号系统', () => {
-  const uniqueName = () => `user_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
+describe('账号系统（手机号验证码）', () => {
+  it('非法手机号与格式错误被拒', async () => {
+    await request(app).post('/api/auth/sms/request').send({ phone: '123' }).expect(400);
+    await request(app).post('/api/auth/sms/login').send({ phone: '13912345678', code: '12' }).expect(400);
+  });
 
-  it('注册成功：返回用户并建立会话（me 可识别）', async () => {
+  it('完整流程：发码（模拟回显）→ 错码 401 → 正码登录 → me 可见 → 退出失效', async () => {
     const agent = request.agent(app);
-    const res = await agent.post('/api/auth/register')
-      .send({ username: uniqueName(), password: 'secret123', nickname: '测试员' })
-      .expect(201);
-    assert.ok(res.body.user.id);
-    assert.strictEqual(res.body.user.nickname, '测试员');
+    const phone = uniquePhone();
+    const r1 = await agent.post('/api/auth/sms/request').send({ phone }).expect(200);
+    assert.strictEqual(r1.body.mock, true);
+    assert.ok(/^\d{6}$/.test(r1.body.devCode));
+
+    const wrong = r1.body.devCode === '000000' ? '000001' : '000000';
+    await agent.post('/api/auth/sms/login').send({ phone, code: wrong }).expect(401);
+
+    const r2 = await agent.post('/api/auth/sms/login').send({ phone, code: r1.body.devCode }).expect(200);
+    assert.strictEqual(r2.body.isNew, true);
+    assert.ok(r2.body.user.avatar);
+    assert.strictEqual(r2.body.user.phone, phone.slice(0, 3) + '****' + phone.slice(7));
 
     const me = await agent.get('/api/auth/me').expect(200);
-    assert.strictEqual(me.body.user.nickname, '测试员');
-  });
+    assert.strictEqual(me.body.user.id, r2.body.user.id);
 
-  it('拒绝非法用户名与过短密码', async () => {
-    await request(app).post('/api/auth/register')
-      .send({ username: 'a!', password: 'secret123' }).expect(400);
-    await request(app).post('/api/auth/register')
-      .send({ username: 'valid_name', password: '123' }).expect(400);
-  });
-
-  it('重复用户名返回 409', async () => {
-    const name = uniqueName();
-    await request(app).post('/api/auth/register').send({ username: name, password: 'secret123' }).expect(201);
-    await request(app).post('/api/auth/register').send({ username: name, password: 'secret123' }).expect(409);
-  });
-
-  it('密码错误返回 401，登录成功返回用户', async () => {
-    const name = uniqueName();
-    await request(app).post('/api/auth/register').send({ username: name, password: 'secret123' }).expect(201);
-
-    await request(app).post('/api/auth/login')
-      .send({ username: name, password: 'wrongpass' }).expect(401);
-
-    const agent = request.agent(app);
-    const res = await agent.post('/api/auth/login')
-      .send({ username: name, password: 'secret123' }).expect(200);
-    assert.strictEqual(res.body.user.username, name);
-  });
-
-  it('退出后会话失效', async () => {
-    const agent = request.agent(app);
-    await agent.post('/api/auth/register').send({ username: uniqueName(), password: 'secret123' }).expect(201);
     await agent.post('/api/auth/logout').expect(200);
     await agent.get('/api/auth/me').expect(401);
+  });
+
+  it('同手机号再登录是同一账号；已消费的验证码不能复用', async () => {
+    const phone = uniquePhone();
+    const agentA = request.agent(app);
+    const first = await smsLogin(agentA, phone);
+    assert.strictEqual(first.isNew, true);
+
+    // 已消费验证码复用 → 401
+    const agentReplay = request.agent(app);
+    await agentReplay.post('/api/auth/sms/login').send({ phone, code: '000000' }).expect(401);
+
+    // 等 1 秒冷却过后重发新码 → 同一用户
+    await new Promise((r) => setTimeout(r, 1100));
+    const agentB = request.agent(app);
+    const again = await smsLogin(agentB, phone);
+    assert.strictEqual(again.isNew, false);
+    assert.strictEqual(again.user.id, first.user.id);
+  });
+
+  it('重发冷却期内重复请求返回 429', async () => {
+    const phone = uniquePhone();
+    await request(app).post('/api/auth/sms/request').send({ phone }).expect(200);
+    const res = await request(app).post('/api/auth/sms/request').send({ phone }).expect(429);
+    assert.strictEqual(res.body.error, 'CODE_COOLDOWN');
+  });
+
+  it('试错 5 次后验证码失效', async () => {
+    const phone = uniquePhone();
+    const r1 = await request(app).post('/api/auth/sms/request').send({ phone }).expect(200);
+    const wrong = r1.body.devCode === '000000' ? '000001' : '000000';
+    for (let i = 0; i < 5; i++) {
+      await request(app).post('/api/auth/sms/login').send({ phone, code: wrong }).expect(401);
+    }
+    await request(app).post('/api/auth/sms/login').send({ phone, code: r1.body.devCode }).expect(401);
+  });
+
+  it('个人中心可改昵称与头像，非法头像被拒', async () => {
+    const agent = request.agent(app);
+    await smsLogin(agent);
+
+    const bad = await agent.patch('/api/user/profile').send({ avatar: '🐯' }).expect(400);
+    assert.strictEqual(bad.body.error, 'INVALID_AVATAR');
+
+    const ok = await agent.patch('/api/user/profile').send({ nickname: '小鹿', avatar: '🦌' }).expect(200);
+    assert.strictEqual(ok.body.user.nickname, '小鹿');
+    assert.strictEqual(ok.body.user.avatar, '🦌');
+
+    const me = await agent.get('/api/auth/me').expect(200);
+    assert.strictEqual(me.body.user.nickname, '小鹿');
+    assert.strictEqual(me.body.user.avatar, '🦌');
   });
 
   it('未登录访问历史接口返回 401', async () => {
@@ -251,8 +300,7 @@ describe('账号系统', () => {
 describe('对话落库与历史恢复', () => {
   it('登录用户对话写入 messages，可用 X-Conv-Id 延续同一会话', async () => {
     const agent = request.agent(app);
-    await agent.post('/api/auth/register')
-      .send({ username: `conv_${Date.now().toString(36)}`, password: 'secret123' }).expect(201);
+    await smsLogin(agent);
 
     const r1 = await agent.post('/api/chat').send({ message: '焦虑', history: [] }).expect(200);
     assert.ok(Number.isInteger(r1.body.convId));
@@ -276,13 +324,12 @@ describe('对话落库与历史恢复', () => {
   });
 
   it('他人会话 id 不会串号：自动开新会话', async () => {
-    const name = `own_${Date.now().toString(36)}`;
     const agentA = request.agent(app);
-    await agentA.post('/api/auth/register').send({ username: name, password: 'secret123' }).expect(201);
+    await smsLogin(agentA);
     const r1 = await agentA.post('/api/chat').send({ message: '焦虑', history: [] }).expect(200);
 
     const agentB = request.agent(app);
-    await agentB.post('/api/auth/register').send({ username: `${name}b`, password: 'secret123' }).expect(201);
+    await smsLogin(agentB);
     const r2 = await agentB.post('/api/chat')
       .set('X-Conv-Id', String(r1.body.convId))
       .send({ message: '焦虑', history: [] })
@@ -298,8 +345,7 @@ describe('对话落库与历史恢复', () => {
 
   it('👍/👎 反馈写入 messages.vote（同时保留 JSONL）', async () => {
     const agent = request.agent(app);
-    await agent.post('/api/auth/register')
-      .send({ username: `fb_${Date.now().toString(36)}`, password: 'secret123' }).expect(201);
+    await smsLogin(agent);
     const chat = await agent.post('/api/chat').send({ message: '焦虑', history: [] }).expect(200);
 
     const res = await agent.post('/api/feedback')

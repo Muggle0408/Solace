@@ -483,70 +483,107 @@ if (bgmListEl) {
     b.classList.toggle('active', b.dataset.id === saved));
 }
 
-// ---------- 账号系统：登录/注册弹层 + 历史会话恢复（游客模式不受影响） ----------
+// ---------- 账号系统：右上角动物头像 + 下拉菜单（游客模式不受影响） ----------
 
-const authBtn = document.getElementById('authBtn');
-const logoutBtn = document.getElementById('logoutBtn');
-const userNick = document.getElementById('userNick');
-const historyBtn = document.getElementById('historyBtn');
-const newConvBtn = document.getElementById('newConvBtn');
+const AVATAR_GUEST = '🐾';
+const ANIMAL_AVATARS = ['🦊', '🐰', '🐱', '🐻', '🐼', '🦉', '🐳', '🦌', '🐿️', '🐸'];
+
+const avatarBtn = document.getElementById('avatarBtn');
+const accountMenu = document.getElementById('accountMenu');
 const authBanner = document.getElementById('authBanner');
 const bannerAuthBtn = document.getElementById('bannerAuthBtn');
 const bannerClose = document.getElementById('bannerClose');
-const authModal = document.getElementById('authModal');
-const tabLogin = document.getElementById('tabLogin');
-const tabRegister = document.getElementById('tabRegister');
-const authForm = document.getElementById('authForm');
-const authUsername = document.getElementById('authUsername');
-const authNickname = document.getElementById('authNickname');
-const nicknameField = document.getElementById('nicknameField');
-const authPassword = document.getElementById('authPassword');
-const authError = document.getElementById('authError');
-const authSubmit = document.getElementById('authSubmit');
+const loginModal = document.getElementById('loginModal');
+const loginClose = document.getElementById('loginClose');
+const loginForm = document.getElementById('loginForm');
+const phoneInput = document.getElementById('phoneInput');
+const codeInput = document.getElementById('codeInput');
+const sendCodeBtn = document.getElementById('sendCodeBtn');
+const loginError = document.getElementById('loginError');
+const loginSubmit = document.getElementById('loginSubmit');
+const devHint = document.getElementById('devHint');
+const profileModal = document.getElementById('profileModal');
+const profileClose = document.getElementById('profileClose');
+const profilePhone = document.getElementById('profilePhone');
+const avatarGrid = document.getElementById('avatarGrid');
+const profileNickname = document.getElementById('profileNickname');
+const profileError = document.getElementById('profileError');
+const profileSave = document.getElementById('profileSave');
 const historyPanel = document.getElementById('historyPanel');
 const historyList = document.getElementById('historyList');
 const historyClose = document.getElementById('historyClose');
 
-let authMode = 'login'; // 'login' | 'register'
+let selectedAvatar = null;
+let codeTimer = null;
+const PHONE_RE = /^1[3-9]\d{9}$/;
+
+function showFormError(el, msg) { el.textContent = msg; el.classList.remove('hidden'); }
+function hideFormError(el) { el.classList.add('hidden'); }
 
 function updateAuthBanner() {
   const dismissed = localStorage.getItem('authBannerDismissed') === '1';
   authBanner.classList.toggle('hidden', !!currentUser || dismissed);
 }
 
+function updateAvatarBtn() {
+  avatarBtn.textContent = (currentUser && currentUser.avatar) || AVATAR_GUEST;
+}
+
+function renderAccountMenu() {
+  const items = [];
+  if (currentUser) {
+    items.push({ icon: '👤', label: '个人中心', onClick: openProfile });
+    items.push({ icon: '💬', label: '对话管理', onClick: openHistoryPanel });
+    items.push({ icon: '✨', label: '新对话', onClick: startNewConversationWithNote });
+    items.push({ icon: '🔄', label: '切换账号', onClick: async () => { await doLogout(false); openLoginModal(); } });
+    items.push({ icon: '🚪', label: '退出登录', onClick: () => doLogout(true) });
+  } else {
+    items.push({ icon: '👤', label: '账号登录', onClick: openLoginModal });
+    items.push({ icon: '✨', label: '新对话', onClick: startNewConversationWithNote });
+  }
+  accountMenu.innerHTML = '';
+  items.forEach(({ icon, label, onClick }) => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'account-menu-item';
+    btn.innerHTML = `<span class="menu-icon">${icon}</span>${label}`;
+    btn.addEventListener('click', () => {
+      closeAccountMenu();
+      onClick();
+    });
+    accountMenu.appendChild(btn);
+  });
+}
+
+function openAccountMenu() {
+  renderAccountMenu();
+  accountMenu.classList.remove('hidden');
+}
+
+function closeAccountMenu() {
+  accountMenu.classList.add('hidden');
+}
+
 function updateAuthUI() {
-  const loggedIn = !!currentUser;
-  authBtn.classList.toggle('hidden', loggedIn);
-  logoutBtn.classList.toggle('hidden', !loggedIn);
-  userNick.classList.toggle('hidden', !loggedIn);
-  historyBtn.classList.toggle('hidden', !loggedIn);
-  newConvBtn.classList.toggle('hidden', !loggedIn);
-  if (loggedIn) userNick.textContent = currentUser.nickname || currentUser.username;
+  updateAvatarBtn();
+  renderAccountMenu();
   updateAuthBanner();
 }
 
-function switchAuthMode(mode) {
-  authMode = mode;
-  const isLogin = mode === 'login';
-  tabLogin.classList.toggle('active', isLogin);
-  tabRegister.classList.toggle('active', !isLogin);
-  nicknameField.style.display = isLogin ? 'none' : '';
-  authSubmit.textContent = isLogin ? '登录' : '注册并登录';
-  authPassword.autocomplete = isLogin ? 'current-password' : 'new-password';
-  authError.classList.add('hidden');
+function startNewConversationWithNote() {
+  startNewConversation();
+  addSystemNote('已开始一段新的对话。');
 }
 
-function openAuthModal() {
-  switchAuthMode(authMode);
-  authModal.classList.remove('hidden');
-  setTimeout(() => authUsername.focus(), 50);
-}
-
-function closeAuthModal() {
-  authModal.classList.add('hidden');
-  authForm.reset();
-  authError.classList.add('hidden');
-}
+avatarBtn.addEventListener('click', (e) => {
+  e.stopPropagation();
+  accountMenu.classList.contains('hidden') ? openAccountMenu() : closeAccountMenu();
+});
+document.addEventListener('click', (e) => {
+  if (!accountMenu.classList.contains('hidden') && !e.target.closest('.account-area')) {
+    closeAccountMenu();
+  }
+});
 
 // 加载指定会话到聊天区（silent：不自动朗读）
 async function loadConversation(convId, meta = {}) {
@@ -624,71 +661,176 @@ async function openHistoryPanel() {
   } catch { /* 静默 */ }
 }
 
-authBtn.addEventListener('click', openAuthModal);
-bannerAuthBtn.addEventListener('click', openAuthModal);
-bannerClose.addEventListener('click', () => {
-  localStorage.setItem('authBannerDismissed', '1');
-  updateAuthBanner();
-});
-tabLogin.addEventListener('click', () => switchAuthMode('login'));
-tabRegister.addEventListener('click', () => switchAuthMode('register'));
-historyBtn.addEventListener('click', openHistoryPanel);
-historyClose.addEventListener('click', () => historyPanel.classList.add('hidden'));
-newConvBtn.addEventListener('click', () => {
-  startNewConversation();
-  addSystemNote('已开始一段新的对话。');
-});
+// ----- 登录弹层（手机号 + 验证码） -----
+function openLoginModal() {
+  hideFormError(loginError);
+  devHint.classList.add('hidden');
+  loginModal.classList.remove('hidden');
+  setTimeout(() => phoneInput.focus(), 50);
+}
 
-// 点击遮罩空白处关闭弹层
-authModal.addEventListener('click', (e) => { if (e.target === authModal) closeAuthModal(); });
-historyPanel.addEventListener('click', (e) => { if (e.target === historyPanel) historyPanel.classList.add('hidden'); });
+function closeLoginModal() {
+  loginModal.classList.add('hidden');
+  loginForm.reset();
+  devHint.classList.add('hidden');
+  hideFormError(loginError);
+}
 
-authForm.addEventListener('submit', async (e) => {
-  e.preventDefault();
-  authError.classList.add('hidden');
-  authSubmit.disabled = true;
+function startCodeCountdown(sec) {
+  let remain = sec;
+  sendCodeBtn.disabled = true;
+  sendCodeBtn.textContent = `${remain} 秒后重发`;
+  clearInterval(codeTimer);
+  codeTimer = setInterval(() => {
+    remain--;
+    if (remain <= 0) {
+      clearInterval(codeTimer);
+      sendCodeBtn.disabled = false;
+      sendCodeBtn.textContent = '获取验证码';
+    } else {
+      sendCodeBtn.textContent = `${remain} 秒后重发`;
+    }
+  }, 1000);
+}
 
-  const body = {
-    username: authUsername.value.trim(),
-    password: authPassword.value
-  };
-  if (authMode === 'register') body.nickname = authNickname.value.trim();
-
+sendCodeBtn.addEventListener('click', async () => {
+  hideFormError(loginError);
+  const phone = phoneInput.value.trim();
+  if (!PHONE_RE.test(phone)) {
+    return showFormError(loginError, '请输入正确的 11 位手机号。');
+  }
+  sendCodeBtn.disabled = true;
   try {
-    const res = await fetch(`/api/auth/${authMode}`, {
+    const res = await fetch('/api/auth/sms/request', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body)
+      body: JSON.stringify({ phone })
     });
     const data = await res.json();
     if (!res.ok) {
-      authError.textContent = data.message || '操作失败，请稍后再试。';
-      authError.classList.remove('hidden');
-      return;
+      sendCodeBtn.disabled = false;
+      if (data.retryAfter) startCodeCountdown(data.retryAfter);
+      return showFormError(loginError, data.message || '验证码发送失败，请稍后再试。');
     }
-    currentUser = data.user;
-    closeAuthModal();
-    updateAuthUI();
-    await restoreLatestConversation();
-    addSystemNote(authMode === 'register'
-      ? `注册成功，欢迎你，${currentUser.nickname || currentUser.username}。`
-      : `欢迎回来，${currentUser.nickname || currentUser.username}。`);
+    startCodeCountdown(60);
+    // 开发模拟模式：验证码直接回显，便于本地联调
+    if (data.mock && data.devCode) {
+      codeInput.value = data.devCode;
+      devHint.textContent = `开发模式：验证码已自动填入（${data.devCode}）。配置短信密钥后自动切换真实下发。`;
+      devHint.classList.remove('hidden');
+    }
   } catch {
-    authError.textContent = '网络异常，请稍后再试。';
-    authError.classList.remove('hidden');
-  } finally {
-    authSubmit.disabled = false;
+    sendCodeBtn.disabled = false;
+    showFormError(loginError, '网络异常，请稍后再试。');
   }
 });
 
-logoutBtn.addEventListener('click', async () => {
+loginForm.addEventListener('submit', async (e) => {
+  e.preventDefault();
+  hideFormError(loginError);
+  const phone = phoneInput.value.trim();
+  const code = codeInput.value.trim();
+  if (!PHONE_RE.test(phone)) return showFormError(loginError, '请输入正确的 11 位手机号。');
+  if (!/^\d{6}$/.test(code)) return showFormError(loginError, '请输入 6 位数字验证码。');
+
+  loginSubmit.disabled = true;
+  try {
+    const res = await fetch('/api/auth/sms/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ phone, code })
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      return showFormError(loginError, data.message || '登录失败，请稍后再试。');
+    }
+    currentUser = data.user;
+    closeLoginModal();
+    updateAuthUI();
+    await restoreLatestConversation();
+    addSystemNote(data.isNew
+      ? '登录成功，已为你创建账号。可以在右上角头像 → 个人中心设置昵称和头像。'
+      : `欢迎回来${currentUser.nickname ? '，' + currentUser.nickname : ''}。`);
+  } catch {
+    showFormError(loginError, '网络异常，请稍后再试。');
+  } finally {
+    loginSubmit.disabled = false;
+  }
+});
+
+loginClose.addEventListener('click', closeLoginModal);
+loginModal.addEventListener('click', (e) => { if (e.target === loginModal) closeLoginModal(); });
+
+// ----- 个人中心 -----
+function openProfile() {
+  if (!currentUser) return;
+  hideFormError(profileError);
+  selectedAvatar = currentUser.avatar || ANIMAL_AVATARS[0];
+  profilePhone.textContent = currentUser.phone ? `当前账号：${currentUser.phone}` : '';
+  profileNickname.value = currentUser.nickname || '';
+  avatarGrid.innerHTML = '';
+  ANIMAL_AVATARS.forEach((a) => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'avatar-option' + (a === selectedAvatar ? ' selected' : '');
+    btn.textContent = a;
+    btn.addEventListener('click', () => {
+      selectedAvatar = a;
+      avatarGrid.querySelectorAll('.avatar-option')
+        .forEach((x) => x.classList.toggle('selected', x.textContent === a));
+    });
+    avatarGrid.appendChild(btn);
+  });
+  profileModal.classList.remove('hidden');
+}
+
+profileClose.addEventListener('click', () => profileModal.classList.add('hidden'));
+profileModal.addEventListener('click', (e) => { if (e.target === profileModal) profileModal.classList.add('hidden'); });
+
+profileSave.addEventListener('click', async () => {
+  hideFormError(profileError);
+  profileSave.disabled = true;
+  try {
+    const res = await fetch('/api/user/profile', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ nickname: profileNickname.value.trim(), avatar: selectedAvatar })
+    });
+    const data = await res.json();
+    if (!res.ok) {
+      return showFormError(profileError, data.message || '保存失败，请稍后再试。');
+    }
+    currentUser = data.user;
+    updateAuthUI();
+    profileModal.classList.add('hidden');
+    addSystemNote('资料已保存。');
+  } catch {
+    showFormError(profileError, '网络异常，请稍后再试。');
+  } finally {
+    profileSave.disabled = false;
+  }
+});
+
+// ----- 退出 / 切换账号 -----
+async function doLogout(withNote) {
   try { await fetch('/api/auth/logout', { method: 'POST' }); } catch { /* 静默 */ }
+  const hadUser = !!currentUser;
   currentUser = null;
   currentConvId = null;
   updateAuthUI();
   startNewConversation();
-  addSystemNote('已退出登录。之前的账号记录仍保留，随时登录可继续。');
+  if (withNote && hadUser) {
+    addSystemNote('已退出登录。之前的账号记录仍保留，随时登录可继续。');
+  }
+}
+
+bannerAuthBtn.addEventListener('click', openLoginModal);
+bannerClose.addEventListener('click', () => {
+  localStorage.setItem('authBannerDismissed', '1');
+  updateAuthBanner();
 });
+historyClose.addEventListener('click', () => historyPanel.classList.add('hidden'));
+historyPanel.addEventListener('click', (e) => { if (e.target === historyPanel) historyPanel.classList.add('hidden'); });
 
 // 启动时恢复登录态
 (async function initAuth() {

@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>情绪空间 · 高敏感人群情绪疏导</title>
-  <link rel="stylesheet" href="style.css?v=20261025">
+  <link rel="stylesheet" href="style.css?v=20261026">
 </head>
 <body>
   <!-- 背景：油画风白蓝幕布（上白下蓝自然过渡，带油画颗粒）；透明底蝴蝶素材待接入 -->
@@ -20,13 +20,6 @@
     <header class="header">
       <h1>情绪空间</h1>
       <p class="subtitle">一个给高敏感人群的安全角落</p>
-      <div class="header-actions" id="headerActions">
-        <button id="historyBtn" class="header-btn hidden" title="查看最近 30 天的对话记录">历史</button>
-        <button id="newConvBtn" class="header-btn hidden" title="开始一段新的对话">新对话</button>
-        <span id="userNick" class="user-nick hidden"></span>
-        <button id="authBtn" class="header-btn">登录 / 注册</button>
-        <button id="logoutBtn" class="header-btn hidden">退出</button>
-      </div>
     </header>
 
     <div class="auth-banner hidden" id="authBanner">
@@ -56,35 +49,63 @@
     </div>
   </div>
 
-  <!-- 登录/注册弹层 -->
-  <div class="modal-mask hidden" id="authModal">
-    <div class="modal-card" role="dialog" aria-label="登录或注册">
-      <div class="modal-tabs">
-        <button class="modal-tab active" id="tabLogin" type="button">登录</button>
-        <button class="modal-tab" id="tabRegister" type="button">注册</button>
+  <!-- 右上角：账号动物头像，点击展开账号菜单 -->
+  <div class="account-area">
+    <button id="avatarBtn" class="avatar-btn" title="账号">🐾</button>
+    <div class="account-menu hidden" id="accountMenu" role="menu"></div>
+  </div>
+
+  <!-- 手机号验证码登录弹层 -->
+  <div class="modal-mask hidden" id="loginModal">
+    <div class="modal-card" role="dialog" aria-label="手机号登录">
+      <div class="modal-title-row">
+        <span class="modal-title">手机号登录</span>
+        <button class="banner-close" id="loginClose" title="关闭">×</button>
       </div>
-      <form id="authForm" novalidate>
+      <p class="modal-sub">首次登录将自动为你创建账号</p>
+      <form id="loginForm" novalidate>
         <label class="form-field">
-          <span>用户名</span>
-          <input type="text" id="authUsername" maxlength="20" autocomplete="username" placeholder="3-20 位字母、数字或下划线">
-        </label>
-        <label class="form-field" id="nicknameField" style="display:none">
-          <span>昵称（选填）</span>
-          <input type="text" id="authNickname" maxlength="20" placeholder="怎么称呼你">
+          <span>手机号</span>
+          <input type="tel" id="phoneInput" maxlength="11" inputmode="numeric" autocomplete="tel" placeholder="请输入 11 位手机号">
         </label>
         <label class="form-field">
-          <span>密码</span>
-          <input type="password" id="authPassword" maxlength="64" autocomplete="current-password" placeholder="6-64 位">
+          <span>验证码</span>
+          <div class="code-row">
+            <input type="text" id="codeInput" maxlength="6" inputmode="numeric" autocomplete="one-time-code" placeholder="6 位验证码">
+            <button type="button" class="code-btn" id="sendCodeBtn">获取验证码</button>
+          </div>
         </label>
-        <div class="form-error hidden" id="authError"></div>
-        <button type="submit" class="form-submit" id="authSubmit">登录</button>
+        <div class="form-error hidden" id="loginError"></div>
+        <div class="dev-hint hidden" id="devHint"></div>
+        <button type="submit" class="form-submit" id="loginSubmit">登录</button>
       </form>
     </div>
   </div>
 
-  <!-- 历史会话列表弹层 -->
+  <!-- 个人中心弹层 -->
+  <div class="modal-mask hidden" id="profileModal">
+    <div class="modal-card" role="dialog" aria-label="个人中心">
+      <div class="modal-title-row">
+        <span class="modal-title">个人中心</span>
+        <button class="banner-close" id="profileClose" title="关闭">×</button>
+      </div>
+      <div class="profile-phone" id="profilePhone"></div>
+      <div class="form-field">
+        <span>选一个动物头像</span>
+        <div class="avatar-grid" id="avatarGrid"></div>
+      </div>
+      <label class="form-field">
+        <span>昵称（选填）</span>
+        <input type="text" id="profileNickname" maxlength="20" placeholder="怎么称呼你">
+      </label>
+      <div class="form-error hidden" id="profileError"></div>
+      <button type="button" class="form-submit" id="profileSave">保存</button>
+    </div>
+  </div>
+
+  <!-- 历史会话列表弹层（对话管理） -->
   <div class="modal-mask hidden" id="historyPanel">
-    <div class="modal-card" role="dialog" aria-label="历史会话">
+    <div class="modal-card" role="dialog" aria-label="对话管理">
       <div class="modal-title-row">
         <span class="modal-title">最近 30 天的对话</span>
         <button class="banner-close" id="historyClose" title="关闭">×</button>
@@ -93,6 +114,6 @@
     </div>
   </div>
 
-  <script src="app.js?v=20261025"></script>
+  <script src="app.js?v=20261026"></script>
 </body>
 </html>

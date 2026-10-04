@@ -1,85 +1,127 @@
 const express = require('express');
-const bcrypt = require('bcryptjs');
+const crypto = require('crypto');
 const db = require('../services/db');
-const { createSession, destroySession, setSessionCookie, clearSessionCookie } = require('../middleware/auth');
+const { createSession, destroySession, setSessionCookie, clearSessionCookie, parseCookies } = require('../middleware/auth');
 const { createRateLimiter } = require('../middleware/rateLimit');
+const { sendVerificationCode } = require('../services/smsClient');
 
 const router = express.Router();
 
-const USERNAME_RE = /^[a-zA-Z0-9_]{3,20}$/;
+const PHONE_RE = /^1[3-9]\d{9}$/;
+// 同号重发间隔（可用 SMS_RESEND_COOLDOWN_SEC 覆盖，测试调小）
+const RESEND_COOLDOWN_SEC = process.env.SMS_RESEND_COOLDOWN_SEC === undefined
+  ? 60
+  : Number(process.env.SMS_RESEND_COOLDOWN_SEC);
+const CODE_TTL_MIN = 10;              // 验证码有效期
+const MAX_ATTEMPTS = 5;               // 单条验证码最多试错次数
 const AUTH_LIMIT_MAX = process.env.AUTH_RATE_LIMIT_MAX === undefined ? 5 : Number(process.env.AUTH_RATE_LIMIT_MAX);
 const authLimiter = createRateLimiter(AUTH_LIMIT_MAX);
 
-const qUserByName = db.prepare('SELECT id, username, pass_hash, nickname, pref_memory FROM users WHERE username = ?');
-const qUserById = db.prepare('SELECT id, username, nickname, pref_memory, created_at FROM users WHERE id = ?');
-const iUser = db.prepare('INSERT INTO users (username, pass_hash, nickname) VALUES (?, ?, ?)');
+// 动物头像候选（前后端共用同一份，前端在 app.js 中复制）
+const ANIMAL_AVATARS = ['🦊', '🐰', '🐱', '🐻', '🐼', '🦉', '🐳', '🦌', '🐿️', '🐸'];
+
+const qLatestCode = db.prepare('SELECT * FROM verification_codes WHERE phone = ? ORDER BY id DESC LIMIT 1');
+const iCode = db.prepare(
+  `INSERT INTO verification_codes (phone, code_hash, expires_at) VALUES (?, ?, datetime('now', '+${CODE_TTL_MIN} minutes'))`
+);
+const uAttempt = db.prepare('UPDATE verification_codes SET attempts = attempts + 1 WHERE id = ?');
+const uConsume = db.prepare(`UPDATE verification_codes SET consumed_at = datetime('now') WHERE id = ?`);
+const qUserByPhone = db.prepare('SELECT id, username, nickname, avatar, phone, pref_memory, created_at FROM users WHERE phone = ?');
+const iUser = db.prepare('INSERT INTO users (username, phone, avatar) VALUES (?, ?, ?)');
+const uProfile = db.prepare('UPDATE users SET nickname = ?, avatar = ? WHERE id = ?');
+
+const nowStr = () => new Date().toISOString().replace('T', ' ').slice(0, 19);
 
 function publicUser(row) {
-  return { id: row.id, username: row.username, nickname: row.nickname, pref_memory: row.pref_memory };
+  return {
+    id: row.id,
+    nickname: row.nickname,
+    avatar: row.avatar,
+    phone: row.phone ? row.phone.slice(0, 3) + '****' + row.phone.slice(7) : null,
+    pref_memory: row.pref_memory
+  };
 }
 
-function validateCredentials(req, res) {
-  const { username = '', password = '', nickname } = req.body || {};
-  const uname = String(username).trim();
-  const pwd = String(password);
-  if (!USERNAME_RE.test(uname)) {
-    res.status(400).json({ error: 'INVALID_USERNAME', message: '用户名需为 3-20 位字母、数字或下划线。' });
-    return null;
-  }
-  if (pwd.length < 6 || pwd.length > 64) {
-    res.status(400).json({ error: 'INVALID_PASSWORD', message: '密码长度需为 6-64 位。' });
-    return null;
-  }
-  if (nickname !== undefined && nickname !== null && String(nickname).trim().length > 20) {
-    res.status(400).json({ error: 'INVALID_NICKNAME', message: '昵称最长 20 个字符。' });
-    return null;
-  }
-  return { username: uname, password: pwd, nickname: nickname ? String(nickname).trim() : null };
-}
-
-// 登录失败延迟，拖慢暴力破解
-function delay(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-// POST /api/auth/register —— 注册即登录
-router.post('/auth/register', authLimiter, async (req, res) => {
-  const valid = validateCredentials(req, res);
-  if (!valid) return;
-
-  const existing = qUserByName.get(valid.username);
-  if (existing) {
-    return res.status(409).json({ error: 'USERNAME_TAKEN', message: '这个用户名已经被使用了，换一个试试吧。' });
+// POST /api/auth/sms/request —— 发送登录验证码（未配置短信密钥时为模拟模式）
+router.post('/auth/sms/request', authLimiter, async (req, res) => {
+  const phone = String((req.body || {}).phone || '').trim();
+  if (!PHONE_RE.test(phone)) {
+    return res.status(400).json({ error: 'INVALID_PHONE', message: '请输入正确的 11 位手机号。' });
   }
 
-  const passHash = await bcrypt.hash(valid.password, 10);
-  const info = iUser.run(valid.username, passHash, valid.nickname);
-  const token = createSession(info.lastInsertRowid);
-  setSessionCookie(req, res, token);
+  const latest = qLatestCode.get(phone);
+  if (latest) {
+    const elapsedSec = (new Date(nowStr()) - new Date(latest.created_at)) / 1000;
+    if (elapsedSec < RESEND_COOLDOWN_SEC) {
+      return res.status(429).json({
+        error: 'CODE_COOLDOWN',
+        message: `发送太频繁了，请 ${RESEND_COOLDOWN_SEC - Math.floor(elapsedSec)} 秒后再试。`,
+        retryAfter: RESEND_COOLDOWN_SEC - Math.floor(elapsedSec)
+      });
+    }
+  }
 
-  const row = qUserById.get(info.lastInsertRowid);
-  res.status(201).json({ user: publicUser(row) });
+  const code = crypto.randomInt(100000, 1000000).toString();
+  iCode.run(phone, crypto.createHash('sha256').update(code).digest('hex'));
+
+  try {
+    const result = await sendVerificationCode(phone, code);
+    res.json({ ok: true, expiresIn: CODE_TTL_MIN * 60, mock: result.mock, devCode: result.devCode });
+  } catch (err) {
+    console.error('短信发送失败:', err.message);
+    res.status(502).json({ error: 'SMS_SEND_FAILED', message: '验证码发送失败，请稍后再试。' });
+  }
 });
 
-// POST /api/auth/login
-router.post('/auth/login', authLimiter, async (req, res) => {
-  const { username = '', password = '' } = req.body || {};
-  const row = qUserByName.get(String(username).trim());
-  const ok = row && await bcrypt.compare(String(password), row.pass_hash);
-  if (!ok) {
-    await delay(400);
-    return res.status(401).json({ error: 'INVALID_CREDENTIALS', message: '用户名或密码不正确。' });
+// POST /api/auth/sms/login —— 验证码登录；手机号未注册则自动创建账号
+router.post('/auth/sms/login', authLimiter, async (req, res) => {
+  const phone = String((req.body || {}).phone || '').trim();
+  const code = String((req.body || {}).code || '').trim();
+  if (!PHONE_RE.test(phone) || !/^\d{6}$/.test(code)) {
+    return res.status(400).json({ error: 'INVALID_INPUT', message: '手机号或验证码格式不正确。' });
   }
 
-  const token = createSession(row.id);
-  setSessionCookie(req, res, token);
-  res.json({ user: publicUser(row) });
+  const record = qLatestCode.get(phone);
+  const fail = (msg) => res.status(401).json({ error: 'INVALID_CODE', message: msg });
+  if (!record || record.consumed_at) return fail('验证码不正确或已过期，请重新获取。');
+  if (record.expires_at <= nowStr()) return fail('验证码已过期，请重新获取。');
+  if (record.attempts >= MAX_ATTEMPTS) {
+    uConsume.run(record.id);
+    return fail('验证码已失效，请重新获取。');
+  }
+
+  const hash = crypto.createHash('sha256').update(code).digest('hex');
+  if (hash !== record.code_hash) {
+    uAttempt.run(record.id);
+    return fail('验证码不正确或已过期，请重新获取。');
+  }
+  uConsume.run(record.id);
+
+  try {
+    let user = qUserByPhone.get(phone);
+    let isNew = false;
+    if (!user) {
+      // 首次登录：自动建号；username 为内部占位（手机号即唯一身份）
+      isNew = true;
+      const username = 'u' + crypto.randomBytes(6).toString('hex');
+      const avatar = ANIMAL_AVATARS[crypto.randomInt(0, ANIMAL_AVATARS.length)];
+      const info = iUser.run(username, phone, avatar);
+      user = qUserByPhone.get(phone)
+        || { id: info.lastInsertRowid, username, nickname: null, avatar, phone, pref_memory: 1 };
+    }
+
+    const token = createSession(user.id);
+    setSessionCookie(req, res, token);
+    res.json({ user: publicUser(user), isNew });
+  } catch (err) {
+    console.error('验证码登录失败:', err);
+    res.status(500).json({ error: 'INTERNAL_ERROR', message: '登录失败，请稍后再试。' });
+  }
 });
 
 // POST /api/auth/logout
 router.post('/auth/logout', (req, res) => {
-  const token = require('../middleware/auth').parseCookies(req).sid;
-  destroySession(token);
+  destroySession(parseCookies(req).sid);
   clearSessionCookie(res);
   res.json({ ok: true });
 });
@@ -90,6 +132,24 @@ router.get('/auth/me', (req, res) => {
     return res.status(401).json({ error: 'NOT_AUTHENTICATED', message: '未登录' });
   }
   res.json({ user: req.user });
+});
+
+// PATCH /api/user/profile —— 个人中心：昵称 + 动物头像
+router.patch('/user/profile', (req, res) => {
+  if (!req.user) {
+    return res.status(401).json({ error: 'NOT_AUTHENTICATED', message: '未登录' });
+  }
+  const { nickname, avatar } = req.body || {};
+  const nick = nickname === undefined || nickname === null ? req.user.nickname : String(nickname).trim().slice(0, 20);
+  const av = avatar === undefined || avatar === null ? req.user.avatar : String(avatar);
+  if (nick && nick.length === 0) {
+    return res.status(400).json({ error: 'INVALID_NICKNAME', message: '昵称不能为空。' });
+  }
+  if (!ANIMAL_AVATARS.includes(av)) {
+    return res.status(400).json({ error: 'INVALID_AVATAR', message: '头像选择无效。' });
+  }
+  uProfile.run(nick || null, av, req.user.id);
+  res.json({ user: { ...req.user, nickname: nick || null, avatar: av } });
 });
 
 module.exports = router;
