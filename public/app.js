@@ -406,18 +406,18 @@ const BGM_LIST = [
   { id: 'bowl', icon: '🪷', label: '颂钵', src: '/bgm/bowl.mp3' }
 ];
 const bgmListEl = document.getElementById('bgmList');
-let currentAudio = null;
-let currentId = null;
-let fadeTimer = null;
+let bgmAudio = null;
+let bgmCurrentId = null;
+let bgmFadeTimer = null;
 
-function fadeTo(audio, target, done) {
-  clearInterval(fadeTimer);
-  fadeTimer = setInterval(() => {
+function bgmFade(audio, target, done) {
+  clearInterval(bgmFadeTimer);
+  bgmFadeTimer = setInterval(() => {
     const v = audio.volume + Math.sign(target - audio.volume) * 0.04;
     audio.volume = Math.max(0, Math.min(1, v));
     if (Math.abs(audio.volume - target) <= 0.05) {
       audio.volume = target;
-      clearInterval(fadeTimer);
+      clearInterval(bgmFadeTimer);
       if (done) done();
     }
   }, 60);
@@ -429,21 +429,21 @@ function selectBgm(id) {
     btn.classList.toggle('active', btn.dataset.id === item.id));
   localStorage.setItem('bgm', item.id);
 
-  if (currentAudio) {
-    const old = currentAudio;
-    currentAudio = null;
-    fadeTo(old, 0, () => old.pause());
+  if (bgmAudio) {
+    const old = bgmAudio;
+    bgmAudio = null;
+    bgmFade(old, 0, () => old.pause());
   }
-  currentId = item.id;
+  bgmCurrentId = item.id;
   if (!item.src) return; // 静音
 
   const audio = new Audio(item.src);
   audio.loop = true;
   audio.volume = 0;
-  audio.play().then(() => fadeTo(audio, 0.45)).catch(() => {
+  audio.play().then(() => bgmFade(audio, 0.45)).catch(() => {
     // 浏览器拦截时静默失败，下次点击再试
   });
-  currentAudio = audio;
+  bgmAudio = audio;
 }
 
 if (bgmListEl) {
