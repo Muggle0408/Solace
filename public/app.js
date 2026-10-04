@@ -392,3 +392,72 @@ userInput.addEventListener('keypress', (e) => {
 
 // 初始化选项
 renderOptions(['焦虑', '委屈', '愤怒', '疲惫', '孤独', '其他']);
+
+// ---------- 背景音乐面板：九种治愈音景（含静音），淡入淡出切换 ----------
+const BGM_LIST = [
+  { id: 'mute', icon: '🔇', label: '静音', src: null },
+  { id: 'fire', icon: '🔥', label: '篝火', src: '/bgm/fire.mp3' },
+  { id: 'rain', icon: '🌧️', label: '下雨', src: '/bgm/rain.mp3' },
+  { id: 'stream', icon: '💧', label: '泉水', src: '/bgm/stream.mp3' },
+  { id: 'waves', icon: '🌊', label: '海浪', src: '/bgm/waves.mp3' },
+  { id: 'wind', icon: '🍃', label: '风声', src: '/bgm/wind.mp3' },
+  { id: 'night', icon: '🌙', label: '夜晚', src: '/bgm/night.mp3' },
+  { id: 'musicbox', icon: '🎵', label: '八音盒', src: '/bgm/musicbox.mp3' },
+  { id: 'bowl', icon: '🪷', label: '颂钵', src: '/bgm/bowl.mp3' }
+];
+const bgmListEl = document.getElementById('bgmList');
+let currentAudio = null;
+let currentId = null;
+let fadeTimer = null;
+
+function fadeTo(audio, target, done) {
+  clearInterval(fadeTimer);
+  fadeTimer = setInterval(() => {
+    const v = audio.volume + Math.sign(target - audio.volume) * 0.04;
+    audio.volume = Math.max(0, Math.min(1, v));
+    if (Math.abs(audio.volume - target) <= 0.05) {
+      audio.volume = target;
+      clearInterval(fadeTimer);
+      if (done) done();
+    }
+  }, 60);
+}
+
+function selectBgm(id) {
+  const item = BGM_LIST.find(b => b.id === id) || BGM_LIST[0];
+  document.querySelectorAll('.bgm-item').forEach(btn =>
+    btn.classList.toggle('active', btn.dataset.id === item.id));
+  localStorage.setItem('bgm', item.id);
+
+  if (currentAudio) {
+    const old = currentAudio;
+    currentAudio = null;
+    fadeTo(old, 0, () => old.pause());
+  }
+  currentId = item.id;
+  if (!item.src) return; // 静音
+
+  const audio = new Audio(item.src);
+  audio.loop = true;
+  audio.volume = 0;
+  audio.play().then(() => fadeTo(audio, 0.45)).catch(() => {
+    // 浏览器拦截时静默失败，下次点击再试
+  });
+  currentAudio = audio;
+}
+
+if (bgmListEl) {
+  BGM_LIST.forEach(item => {
+    const btn = document.createElement('button');
+    btn.className = 'bgm-item';
+    btn.dataset.id = item.id;
+    btn.title = item.label;
+    btn.innerHTML = `<span class="bgm-circle">${item.icon}</span><span class="bgm-label">${item.label}</span>`;
+    btn.addEventListener('click', () => selectBgm(item.id));
+    bgmListEl.appendChild(btn);
+  });
+  // 恢复上次选择（仅高亮，不自动播放——遵守浏览器自动播放策略）
+  const saved = localStorage.getItem('bgm');
+  if (saved) document.querySelectorAll('.bgm-item').forEach(b =>
+    b.classList.toggle('active', b.dataset.id === saved));
+}
