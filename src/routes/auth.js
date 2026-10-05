@@ -4,10 +4,12 @@ const db = require('../services/db');
 const { createSession, destroySession, setSessionCookie, clearSessionCookie, parseCookies } = require('../middleware/auth');
 const { createRateLimiter } = require('../middleware/rateLimit');
 const { sendVerificationCode } = require('../services/smsClient');
+const { sendCodeEmail } = require('../services/mailClient');
 
 const router = express.Router();
 
 const PHONE_RE = /^1[3-9]\d{9}$/;
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 // 同号重发间隔（可用 SMS_RESEND_COOLDOWN_SEC 覆盖，测试调小）
 const RESEND_COOLDOWN_SEC = process.env.SMS_RESEND_COOLDOWN_SEC === undefined
   ? 60
@@ -15,41 +17,103 @@ const RESEND_COOLDOWN_SEC = process.env.SMS_RESEND_COOLDOWN_SEC === undefined
 const CODE_TTL_MIN = 10;              // 验证码有效期
 const MAX_ATTEMPTS = 5;               // 单条验证码最多试错次数
 const AUTH_LIMIT_MAX = process.env.AUTH_RATE_LIMIT_MAX === undefined ? 5 : Number(process.env.AUTH_RATE_LIMIT_MAX);
+const CODE_DAILY_MAX_PER_IP = process.env.CODE_SEND_DAILY_MAX_PER_IP === undefined
+  ? 20
+  : Number(process.env.CODE_SEND_DAILY_MAX_PER_IP);
 const authLimiter = createRateLimiter(AUTH_LIMIT_MAX);
 
 // 动物头像候选（前后端共用同一份，前端在 app.js 中复制）
 const ANIMAL_AVATARS = ['🦊', '🐰', '🐱', '🐻', '🐼', '🦉', '🐳', '🦌', '🐿️', '🐸'];
 
-const qLatestCode = db.prepare('SELECT * FROM verification_codes WHERE phone = ? ORDER BY id DESC LIMIT 1');
+const CHANNELS = {
+  sms: {
+    validate: (t) => PHONE_RE.test(t),
+    invalidMsg: '请输入正确的 11 位手机号。',
+    findUser: db.prepare('SELECT id, username, nickname, avatar, phone, email, pref_memory, created_at FROM users WHERE phone = ?'),
+    createUser: db.prepare('INSERT INTO users (username, phone, avatar) VALUES (?, ?, ?)'),
+    mask: (t) => t.slice(0, 3) + '****' + t.slice(7)
+  },
+  email: {
+    validate: (t) => EMAIL_RE.test(t) && t.length <= 100,
+    invalidMsg: '请输入正确的邮箱地址。',
+    findUser: db.prepare('SELECT id, username, nickname, avatar, phone, email, pref_memory, created_at FROM users WHERE email = ?'),
+    createUser: db.prepare('INSERT INTO users (username, email, avatar) VALUES (?, ?, ?)'),
+    mask: (t) => {
+      const [local, domain] = t.split('@');
+      return local.slice(0, 1) + '***@' + domain;
+    }
+  }
+};
+
+const qLatestCode = db.prepare(
+  'SELECT * FROM verification_codes WHERE target = ? AND channel = ? ORDER BY id DESC LIMIT 1'
+);
 const iCode = db.prepare(
-  `INSERT INTO verification_codes (phone, code_hash, expires_at) VALUES (?, ?, datetime('now', '+${CODE_TTL_MIN} minutes'))`
+  `INSERT INTO verification_codes (target, channel, code_hash, expires_at)
+   VALUES (?, ?, ?, datetime('now', '+${CODE_TTL_MIN} minutes'))`
 );
 const uAttempt = db.prepare('UPDATE verification_codes SET attempts = attempts + 1 WHERE id = ?');
 const uConsume = db.prepare(`UPDATE verification_codes SET consumed_at = datetime('now') WHERE id = ?`);
-const qUserByPhone = db.prepare('SELECT id, username, nickname, avatar, phone, pref_memory, created_at FROM users WHERE phone = ?');
-const iUser = db.prepare('INSERT INTO users (username, phone, avatar) VALUES (?, ?, ?)');
 const uProfile = db.prepare('UPDATE users SET nickname = ?, avatar = ? WHERE id = ?');
 
 const nowStr = () => new Date().toISOString().replace('T', ' ').slice(0, 19);
+
+// 发码日限额（防短信/邮件轰炸刷费）：每 IP 每天 N 条
+const sendCounts = new Map(); // ip -> { day: 'YYYY-MM-DD', count: number }
+function dailyCapHit(ip) {
+  if (CODE_DAILY_MAX_PER_IP <= 0) return false;
+  const today = new Date().toISOString().slice(0, 10);
+  const rec = sendCounts.get(ip);
+  return !!rec && rec.day === today && rec.count >= CODE_DAILY_MAX_PER_IP;
+}
+function recordSend(ip) {
+  const today = new Date().toISOString().slice(0, 10);
+  const rec = sendCounts.get(ip);
+  if (!rec || rec.day !== today) sendCounts.set(ip, { day: today, count: 1 });
+  else rec.count++;
+}
+
+function clientIp(req) {
+  return (req.headers['x-forwarded-for'] || '').split(',')[0].trim() || req.socket.remoteAddress || 'unknown';
+}
 
 function publicUser(row) {
   return {
     id: row.id,
     nickname: row.nickname,
     avatar: row.avatar,
-    phone: row.phone ? row.phone.slice(0, 3) + '****' + row.phone.slice(7) : null,
+    phone: row.phone ? CHANNELS.sms.mask(row.phone) : null,
+    email: row.email ? CHANNELS.email.mask(row.email) : null,
     pref_memory: row.pref_memory
   };
 }
 
-// POST /api/auth/sms/request —— 发送登录验证码（未配置短信密钥时为模拟模式）
-router.post('/auth/sms/request', authLimiter, async (req, res) => {
-  const phone = String((req.body || {}).phone || '').trim();
-  if (!PHONE_RE.test(phone)) {
-    return res.status(400).json({ error: 'INVALID_PHONE', message: '请输入正确的 11 位手机号。' });
+function normalizeTarget(channel, raw) {
+  const t = String(raw || '').trim();
+  return channel === 'email' ? t.toLowerCase() : t;
+}
+
+// POST /api/auth/code/request —— 发送登录验证码（sms 走腾讯云/模拟，email 走 SMTP/模拟）
+router.post('/auth/code/request', authLimiter, async (req, res) => {
+  const channel = String((req.body || {}).channel || 'sms');
+  const cfg = CHANNELS[channel];
+  if (!cfg) {
+    return res.status(400).json({ error: 'INVALID_CHANNEL', message: '不支持的验证方式。' });
+  }
+  const target = normalizeTarget(channel, (req.body || {}).target);
+  if (!cfg.validate(target)) {
+    return res.status(400).json({ error: 'INVALID_TARGET', message: cfg.invalidMsg });
   }
 
-  const latest = qLatestCode.get(phone);
+  const ip = clientIp(req);
+  if (dailyCapHit(ip)) {
+    return res.status(429).json({
+      error: 'DAILY_CAP_HIT',
+      message: '今天发送次数已达上限，请明天再试。'
+    });
+  }
+
+  const latest = qLatestCode.get(target, channel);
   if (latest) {
     const elapsedSec = (new Date(nowStr()) - new Date(latest.created_at)) / 1000;
     if (elapsedSec < RESEND_COOLDOWN_SEC) {
@@ -62,26 +126,34 @@ router.post('/auth/sms/request', authLimiter, async (req, res) => {
   }
 
   const code = crypto.randomInt(100000, 1000000).toString();
-  iCode.run(phone, crypto.createHash('sha256').update(code).digest('hex'));
+  iCode.run(target, channel, crypto.createHash('sha256').update(code).digest('hex'));
 
   try {
-    const result = await sendVerificationCode(phone, code);
+    const result = channel === 'sms'
+      ? await sendVerificationCode(target, code)
+      : await sendCodeEmail(target, code);
+    recordSend(ip);
     res.json({ ok: true, expiresIn: CODE_TTL_MIN * 60, mock: result.mock, devCode: result.devCode });
   } catch (err) {
-    console.error('短信发送失败:', err.message);
-    res.status(502).json({ error: 'SMS_SEND_FAILED', message: '验证码发送失败，请稍后再试。' });
+    console.error(`${channel} 验证码发送失败:`, err.message);
+    res.status(502).json({ error: 'SEND_FAILED', message: '验证码发送失败，请稍后再试。' });
   }
 });
 
-// POST /api/auth/sms/login —— 验证码登录；手机号未注册则自动创建账号
-router.post('/auth/sms/login', authLimiter, async (req, res) => {
-  const phone = String((req.body || {}).phone || '').trim();
+// POST /api/auth/code/login —— 验证码登录；未注册则自动创建唯一账号
+router.post('/auth/code/login', authLimiter, async (req, res) => {
+  const channel = String((req.body || {}).channel || 'sms');
+  const cfg = CHANNELS[channel];
+  if (!cfg) {
+    return res.status(400).json({ error: 'INVALID_CHANNEL', message: '不支持的验证方式。' });
+  }
+  const target = normalizeTarget(channel, (req.body || {}).target);
   const code = String((req.body || {}).code || '').trim();
-  if (!PHONE_RE.test(phone) || !/^\d{6}$/.test(code)) {
-    return res.status(400).json({ error: 'INVALID_INPUT', message: '手机号或验证码格式不正确。' });
+  if (!cfg.validate(target) || !/^\d{6}$/.test(code)) {
+    return res.status(400).json({ error: 'INVALID_INPUT', message: '账号或验证码格式不正确。' });
   }
 
-  const record = qLatestCode.get(phone);
+  const record = qLatestCode.get(target, channel);
   const fail = (msg) => res.status(401).json({ error: 'INVALID_CODE', message: msg });
   if (!record || record.consumed_at) return fail('验证码不正确或已过期，请重新获取。');
   if (record.expires_at <= nowStr()) return fail('验证码已过期，请重新获取。');
@@ -98,16 +170,16 @@ router.post('/auth/sms/login', authLimiter, async (req, res) => {
   uConsume.run(record.id);
 
   try {
-    let user = qUserByPhone.get(phone);
+    let user = cfg.findUser.get(target);
     let isNew = false;
     if (!user) {
-      // 首次登录：自动建号；username 为内部占位（手机号即唯一身份）
+      // 首次登录：自动建号（该手机号/邮箱即唯一账号）；username 为内部占位
       isNew = true;
       const username = 'u' + crypto.randomBytes(6).toString('hex');
       const avatar = ANIMAL_AVATARS[crypto.randomInt(0, ANIMAL_AVATARS.length)];
-      const info = iUser.run(username, phone, avatar);
-      user = qUserByPhone.get(phone)
-        || { id: info.lastInsertRowid, username, nickname: null, avatar, phone, pref_memory: 1 };
+      const info = cfg.createUser.run(username, target, avatar);
+      user = cfg.findUser.get(target)
+        || { id: info.lastInsertRowid, username, nickname: null, avatar, phone: null, email: null, pref_memory: 1 };
     }
 
     const token = createSession(user.id);

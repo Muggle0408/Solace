@@ -15,7 +15,7 @@ function parseCookies(req) {
 }
 
 const qSession = db.prepare(`
-  SELECT s.token, s.expires_at, u.id, u.username, u.nickname, u.avatar, u.pref_memory
+  SELECT s.token, s.expires_at, u.id, u.username, u.nickname, u.avatar, u.phone, u.email, u.pref_memory
   FROM sessions s JOIN users u ON u.id = s.user_id
   WHERE s.token = ?`);
 const qTouch = db.prepare(`UPDATE sessions SET expires_at = datetime('now', '+${SESSION_DAYS} days') WHERE token = ?`);
@@ -49,7 +49,15 @@ function authMiddleware(req, res, next) {
   if (token) {
     const row = qSession.get(token);
     if (row && row.expires_at > new Date().toISOString().replace('T', ' ').slice(0, 19)) {
-      req.user = { id: row.id, username: row.username, nickname: row.nickname, avatar: row.avatar, pref_memory: row.pref_memory };
+      req.user = {
+        id: row.id,
+        username: row.username,
+        nickname: row.nickname,
+        avatar: row.avatar,
+        phone: row.phone ? row.phone.slice(0, 3) + '****' + row.phone.slice(7) : null,
+        email: row.email ? row.email.split('@')[0].slice(0, 1) + '***@' + row.email.split('@')[1] : null,
+        pref_memory: row.pref_memory
+      };
       req.sessionToken = token;
       qTouch.run(token);
     } else if (row) {

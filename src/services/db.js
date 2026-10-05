@@ -99,5 +99,17 @@ if (passHashCol && passHashCol.notnull) {
 }
 
 db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_users_phone ON users(phone)`);
+if (!colNames.includes('email')) db.exec(`ALTER TABLE users ADD COLUMN email TEXT`);
+db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_users_email ON users(email)`);
+
+// ---- verification_codes：phone 泛化为 target（手机号或邮箱），并加通道标识 ----
+const vcColNames = db.prepare('PRAGMA table_info(verification_codes)').all().map((c) => c.name);
+if (vcColNames.includes('phone') && !vcColNames.includes('target')) {
+  db.exec(`ALTER TABLE verification_codes RENAME COLUMN phone TO target`);
+}
+if (!vcColNames.includes('channel')) {
+  db.exec(`ALTER TABLE verification_codes ADD COLUMN channel TEXT NOT NULL DEFAULT 'sms'`);
+}
+db.exec(`CREATE INDEX IF NOT EXISTS idx_vc_target ON verification_codes(target, channel, id)`);
 
 module.exports = db;

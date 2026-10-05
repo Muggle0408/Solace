@@ -496,7 +496,10 @@ const bannerClose = document.getElementById('bannerClose');
 const loginModal = document.getElementById('loginModal');
 const loginClose = document.getElementById('loginClose');
 const loginForm = document.getElementById('loginForm');
-const phoneInput = document.getElementById('phoneInput');
+const targetLabel = document.getElementById('targetLabel');
+const targetInput = document.getElementById('targetInput');
+const tabSms = document.getElementById('tabSms');
+const tabEmail = document.getElementById('tabEmail');
 const codeInput = document.getElementById('codeInput');
 const sendCodeBtn = document.getElementById('sendCodeBtn');
 const loginError = document.getElementById('loginError');
@@ -515,7 +518,22 @@ const historyClose = document.getElementById('historyClose');
 
 let selectedAvatar = null;
 let codeTimer = null;
-const PHONE_RE = /^1[3-9]\d{9}$/;
+let loginChannel = 'sms'; // 'sms' | 'email'
+
+const CHANNEL_CFG = {
+  sms: {
+    label: '手机号',
+    placeholder: '请输入 11 位手机号',
+    re: /^1[3-9]\d{9}$/,
+    err: '请输入正确的 11 位手机号。'
+  },
+  email: {
+    label: '邮箱',
+    placeholder: '请输入邮箱地址，如 name@example.com',
+    re: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
+    err: '请输入正确的邮箱地址。'
+  }
+};
 
 function showFormError(el, msg) { el.textContent = msg; el.classList.remove('hidden'); }
 function hideFormError(el) { el.classList.add('hidden'); }
@@ -661,12 +679,23 @@ async function openHistoryPanel() {
   } catch { /* 静默 */ }
 }
 
-// ----- 登录弹层（手机号 + 验证码） -----
+// ----- 登录弹层（手机号 / 邮箱 + 验证码） -----
+function switchLoginChannel(channel) {
+  loginChannel = channel;
+  const cfg = CHANNEL_CFG[channel];
+  tabSms.classList.toggle('active', channel === 'sms');
+  tabEmail.classList.toggle('active', channel === 'email');
+  targetLabel.textContent = cfg.label;
+  targetInput.placeholder = cfg.placeholder;
+  targetInput.value = '';
+  hideFormError(loginError);
+}
+
 function openLoginModal() {
   hideFormError(loginError);
   devHint.classList.add('hidden');
   loginModal.classList.remove('hidden');
-  setTimeout(() => phoneInput.focus(), 50);
+  setTimeout(() => targetInput.focus(), 50);
 }
 
 function closeLoginModal() {
@@ -695,16 +724,17 @@ function startCodeCountdown(sec) {
 
 sendCodeBtn.addEventListener('click', async () => {
   hideFormError(loginError);
-  const phone = phoneInput.value.trim();
-  if (!PHONE_RE.test(phone)) {
-    return showFormError(loginError, '请输入正确的 11 位手机号。');
+  const cfg = CHANNEL_CFG[loginChannel];
+  const target = targetInput.value.trim();
+  if (!cfg.re.test(target)) {
+    return showFormError(loginError, cfg.err);
   }
   sendCodeBtn.disabled = true;
   try {
-    const res = await fetch('/api/auth/sms/request', {
+    const res = await fetch('/api/auth/code/request', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ phone })
+      body: JSON.stringify({ channel: loginChannel, target })
     });
     const data = await res.json();
     if (!res.ok) {
@@ -716,7 +746,7 @@ sendCodeBtn.addEventListener('click', async () => {
     // 开发模拟模式：验证码直接回显，便于本地联调
     if (data.mock && data.devCode) {
       codeInput.value = data.devCode;
-      devHint.textContent = `开发模式：验证码已自动填入（${data.devCode}）。配置短信密钥后自动切换真实下发。`;
+      devHint.textContent = `开发模式：验证码已自动填入（${data.devCode}）。配置短信/SMTP 密钥后自动切换真实下发。`;
       devHint.classList.remove('hidden');
     }
   } catch {
@@ -728,17 +758,18 @@ sendCodeBtn.addEventListener('click', async () => {
 loginForm.addEventListener('submit', async (e) => {
   e.preventDefault();
   hideFormError(loginError);
-  const phone = phoneInput.value.trim();
+  const cfg = CHANNEL_CFG[loginChannel];
+  const target = targetInput.value.trim();
   const code = codeInput.value.trim();
-  if (!PHONE_RE.test(phone)) return showFormError(loginError, '请输入正确的 11 位手机号。');
+  if (!cfg.re.test(target)) return showFormError(loginError, cfg.err);
   if (!/^\d{6}$/.test(code)) return showFormError(loginError, '请输入 6 位数字验证码。');
 
   loginSubmit.disabled = true;
   try {
-    const res = await fetch('/api/auth/sms/login', {
+    const res = await fetch('/api/auth/code/login', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ phone, code })
+      body: JSON.stringify({ channel: loginChannel, target, code })
     });
     const data = await res.json();
     if (!res.ok) {
@@ -760,13 +791,17 @@ loginForm.addEventListener('submit', async (e) => {
 
 loginClose.addEventListener('click', closeLoginModal);
 loginModal.addEventListener('click', (e) => { if (e.target === loginModal) closeLoginModal(); });
+tabSms.addEventListener('click', () => switchLoginChannel('sms'));
+tabEmail.addEventListener('click', () => switchLoginChannel('email'));
 
 // ----- 个人中心 -----
 function openProfile() {
   if (!currentUser) return;
   hideFormError(profileError);
   selectedAvatar = currentUser.avatar || ANIMAL_AVATARS[0];
-  profilePhone.textContent = currentUser.phone ? `当前账号：${currentUser.phone}` : '';
+  profilePhone.textContent = currentUser.phone
+    ? `当前账号：${currentUser.phone}`
+    : (currentUser.email ? `当前账号：${currentUser.email}` : '');
   profileNickname.value = currentUser.nickname || '';
   avatarGrid.innerHTML = '';
   ANIMAL_AVATARS.forEach((a) => {

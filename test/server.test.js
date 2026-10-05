@@ -14,7 +14,11 @@ process.env.TENCENT_SMS_SECRET_KEY = '';
 process.env.TENCENT_SMS_SDK_APP_ID = '';
 process.env.TENCENT_SMS_SIGN_NAME = '';
 process.env.TENCENT_SMS_TEMPLATE_ID = '';
+process.env.SMTP_HOST = '';
+process.env.SMTP_USER = '';
+process.env.SMTP_PASS = '';
 process.env.SMS_RESEND_COOLDOWN_SEC = '1';
+process.env.CODE_SEND_DAILY_MAX_PER_IP = '3';
 
 const { describe, it } = require('node:test');
 const assert = require('node:assert');
@@ -24,14 +28,28 @@ const { detectCrisis } = require('../src/services/crisisDetector');
 const ruleResponder = require('../src/engine/ruleResponder');
 const { getCurrentStage, isValidTransition } = require('../src/config/stages');
 
-// 测试工具：唯一手机号 + 验证码一键登录（SMS 模拟模式）
-function uniquePhone() {
-  return '13' + String(Math.floor(Math.random() * 900000000) + 100000000);
+// 测试工具：唯一账号 + 验证码一键登录（短信/邮件均为模拟模式）
+let ipSeq = 0;
+function freshIp() {
+  ipSeq += 1;
+  return `10.9.${(ipSeq >> 8) & 255}.${ipSeq & 255}`;
 }
-async function smsLogin(agent, phone = uniquePhone()) {
-  const r = await agent.post('/api/auth/sms/request').send({ phone }).expect(200);
+const uniquePhone = () => '13' + String(Math.floor(Math.random() * 900000000) + 100000000);
+const uniqueEmail = () => `t${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}@test.com`;
+
+function requestCode(agent, channel, target, ip = freshIp()) {
+  return agent.post('/api/auth/code/request')
+    .set('X-Forwarded-For', ip)
+    .send({ channel, target });
+}
+async function loginUser(agent, channel, target) {
+  const r = await requestCode(agent, channel, target);
+  assert.strictEqual(r.status, 200);
   assert.strictEqual(r.body.mock, true);
-  const res = await agent.post('/api/auth/sms/login').send({ phone, code: r.body.devCode }).expect(200);
+  const res = await agent.post('/api/auth/code/login')
+    .set('X-Forwarded-For', freshIp())
+    .send({ channel, target, code: r.body.devCode });
+  assert.strictEqual(res.status, 200);
   return res.body;
 }
 
@@ -213,26 +231,39 @@ describe('语音合成', () => {
   });
 });
 
-describe('账号系统（手机号验证码）', () => {
-  it('非法手机号与格式错误被拒', async () => {
-    await request(app).post('/api/auth/sms/request').send({ phone: '123' }).expect(400);
-    await request(app).post('/api/auth/sms/login').send({ phone: '13912345678', code: '12' }).expect(400);
+describe('账号系统（多通道验证码）', () => {
+  it('非法格式与不支持的通道被拒', async () => {
+    await requestCode(request(app), 'sms', '123').expect(400);
+    await requestCode(request(app), 'email', 'not-an-email').expect(400);
+    await requestCode(request(app), 'wechat', 'whatever').expect(400);
+    const agent = request.agent(app);
+    await requestCode(agent, 'email', uniqueEmail());
+    await agent.post('/api/auth/code/login')
+      .set('X-Forwarded-For', freshIp())
+      .send({ channel: 'email', target: uniqueEmail(), code: '12' })
+      .expect(400);
   });
 
-  it('完整流程：发码（模拟回显）→ 错码 401 → 正码登录 → me 可见 → 退出失效', async () => {
+  it('邮箱完整流程：发码（模拟回显）→ 错码 401 → 正码登录 → me 可见 → 退出失效', async () => {
     const agent = request.agent(app);
-    const phone = uniquePhone();
-    const r1 = await agent.post('/api/auth/sms/request').send({ phone }).expect(200);
+    const email = uniqueEmail();
+    const r1 = await requestCode(agent, 'email', email).expect(200);
     assert.strictEqual(r1.body.mock, true);
     assert.ok(/^\d{6}$/.test(r1.body.devCode));
 
     const wrong = r1.body.devCode === '000000' ? '000001' : '000000';
-    await agent.post('/api/auth/sms/login').send({ phone, code: wrong }).expect(401);
+    await agent.post('/api/auth/code/login')
+      .set('X-Forwarded-For', freshIp())
+      .send({ channel: 'email', target: email, code: wrong })
+      .expect(401);
 
-    const r2 = await agent.post('/api/auth/sms/login').send({ phone, code: r1.body.devCode }).expect(200);
+    const r2 = await agent.post('/api/auth/code/login')
+      .set('X-Forwarded-For', freshIp())
+      .send({ channel: 'email', target: email, code: r1.body.devCode })
+      .expect(200);
     assert.strictEqual(r2.body.isNew, true);
     assert.ok(r2.body.user.avatar);
-    assert.strictEqual(r2.body.user.phone, phone.slice(0, 3) + '****' + phone.slice(7));
+    assert.strictEqual(r2.body.user.email, email[0] + '***@' + email.split('@')[1]);
 
     const me = await agent.get('/api/auth/me').expect(200);
     assert.strictEqual(me.body.user.id, r2.body.user.id);
@@ -241,44 +272,74 @@ describe('账号系统（手机号验证码）', () => {
     await agent.get('/api/auth/me').expect(401);
   });
 
-  it('同手机号再登录是同一账号；已消费的验证码不能复用', async () => {
-    const phone = uniquePhone();
+  it('同一邮箱再登录是同一账号；已消费的验证码不能复用', async () => {
+    const email = uniqueEmail();
     const agentA = request.agent(app);
-    const first = await smsLogin(agentA, phone);
+    const first = await loginUser(agentA, 'email', email);
     assert.strictEqual(first.isNew, true);
 
     // 已消费验证码复用 → 401
     const agentReplay = request.agent(app);
-    await agentReplay.post('/api/auth/sms/login').send({ phone, code: '000000' }).expect(401);
+    await agentReplay.post('/api/auth/code/login')
+      .set('X-Forwarded-For', freshIp())
+      .send({ channel: 'email', target: email, code: '000000' })
+      .expect(401);
 
-    // 等 1 秒冷却过后重发新码 → 同一用户
+    // 冷却过后重发新码 → 同一用户
     await new Promise((r) => setTimeout(r, 1100));
     const agentB = request.agent(app);
-    const again = await smsLogin(agentB, phone);
+    const again = await loginUser(agentB, 'email', email);
+    assert.strictEqual(again.isNew, false);
+    assert.strictEqual(again.user.id, first.user.id);
+  });
+
+  it('手机号通道同样建立唯一账号', async () => {
+    const phone = uniquePhone();
+    const first = await loginUser(request.agent(app), 'sms', phone);
+    assert.strictEqual(first.isNew, true);
+    assert.strictEqual(first.user.phone, phone.slice(0, 3) + '****' + phone.slice(7));
+
+    await new Promise((r) => setTimeout(r, 1100));
+    const again = await loginUser(request.agent(app), 'sms', phone);
     assert.strictEqual(again.isNew, false);
     assert.strictEqual(again.user.id, first.user.id);
   });
 
   it('重发冷却期内重复请求返回 429', async () => {
-    const phone = uniquePhone();
-    await request(app).post('/api/auth/sms/request').send({ phone }).expect(200);
-    const res = await request(app).post('/api/auth/sms/request').send({ phone }).expect(429);
+    const email = uniqueEmail();
+    await requestCode(request.agent(app), 'email', email).expect(200);
+    const res = await requestCode(request.agent(app), 'email', email).expect(429);
     assert.strictEqual(res.body.error, 'CODE_COOLDOWN');
   });
 
   it('试错 5 次后验证码失效', async () => {
-    const phone = uniquePhone();
-    const r1 = await request(app).post('/api/auth/sms/request').send({ phone }).expect(200);
+    const email = uniqueEmail();
+    const r1 = await requestCode(request.agent(app), 'email', email).expect(200);
     const wrong = r1.body.devCode === '000000' ? '000001' : '000000';
     for (let i = 0; i < 5; i++) {
-      await request(app).post('/api/auth/sms/login').send({ phone, code: wrong }).expect(401);
+      await request.agent(app).post('/api/auth/code/login')
+        .set('X-Forwarded-For', freshIp())
+        .send({ channel: 'email', target: email, code: wrong })
+        .expect(401);
     }
-    await request(app).post('/api/auth/sms/login').send({ phone, code: r1.body.devCode }).expect(401);
+    await request.agent(app).post('/api/auth/code/login')
+      .set('X-Forwarded-For', freshIp())
+      .send({ channel: 'email', target: email, code: r1.body.devCode })
+      .expect(401);
+  });
+
+  it('单 IP 每日发码上限（防轰炸）', async () => {
+    const ip = freshIp(); // 固定同一 IP，发 3 条（上限）后第 4 条被拒
+    await requestCode(request.agent(app), 'email', uniqueEmail(), ip).expect(200);
+    await requestCode(request.agent(app), 'email', uniqueEmail(), ip).expect(200);
+    await requestCode(request.agent(app), 'email', uniqueEmail(), ip).expect(200);
+    const res = await requestCode(request.agent(app), 'email', uniqueEmail(), ip).expect(429);
+    assert.strictEqual(res.body.error, 'DAILY_CAP_HIT');
   });
 
   it('个人中心可改昵称与头像，非法头像被拒', async () => {
     const agent = request.agent(app);
-    await smsLogin(agent);
+    await loginUser(agent, 'email', uniqueEmail());
 
     const bad = await agent.patch('/api/user/profile').send({ avatar: '🐯' }).expect(400);
     assert.strictEqual(bad.body.error, 'INVALID_AVATAR');
@@ -300,7 +361,7 @@ describe('账号系统（手机号验证码）', () => {
 describe('对话落库与历史恢复', () => {
   it('登录用户对话写入 messages，可用 X-Conv-Id 延续同一会话', async () => {
     const agent = request.agent(app);
-    await smsLogin(agent);
+    await loginUser(agent, 'email', uniqueEmail());
 
     const r1 = await agent.post('/api/chat').send({ message: '焦虑', history: [] }).expect(200);
     assert.ok(Number.isInteger(r1.body.convId));
@@ -325,11 +386,11 @@ describe('对话落库与历史恢复', () => {
 
   it('他人会话 id 不会串号：自动开新会话', async () => {
     const agentA = request.agent(app);
-    await smsLogin(agentA);
+    await loginUser(agentA, 'email', uniqueEmail());
     const r1 = await agentA.post('/api/chat').send({ message: '焦虑', history: [] }).expect(200);
 
     const agentB = request.agent(app);
-    await smsLogin(agentB);
+    await loginUser(agentB, 'email', uniqueEmail());
     const r2 = await agentB.post('/api/chat')
       .set('X-Conv-Id', String(r1.body.convId))
       .send({ message: '焦虑', history: [] })
@@ -345,7 +406,7 @@ describe('对话落库与历史恢复', () => {
 
   it('👍/👎 反馈写入 messages.vote（同时保留 JSONL）', async () => {
     const agent = request.agent(app);
-    await smsLogin(agent);
+    await loginUser(agent, 'email', uniqueEmail());
     const chat = await agent.post('/api/chat').send({ message: '焦虑', history: [] }).expect(200);
 
     const res = await agent.post('/api/feedback')

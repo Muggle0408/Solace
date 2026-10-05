@@ -552,6 +552,31 @@ body {
   margin-bottom: 16px;
 }
 
+/* 登录方式切换（手机号 / 邮箱） */
+.channel-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.channel-tab {
+  flex: 1;
+  border: 1px solid #c3d2e8;
+  background: rgba(255, 255, 255, .78);
+  color: #6d7f99;
+  padding: 7px 0;
+  border-radius: 12px;
+  font-size: 13px;
+  cursor: pointer;
+  transition: all .2s;
+}
+
+.channel-tab.active {
+  background: #4a678f;
+  border-color: #4a678f;
+  color: #fff;
+}
+
 .form-field {
   display: block;
   margin-bottom: 14px;

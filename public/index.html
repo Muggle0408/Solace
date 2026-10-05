@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>情绪空间 · 高敏感人群情绪疏导</title>
-  <link rel="stylesheet" href="style.css?v=20261026">
+  <link rel="stylesheet" href="style.css?v=20261027">
 </head>
 <body>
   <!-- 背景：油画风白蓝幕布（上白下蓝自然过渡，带油画颗粒）；透明底蝴蝶素材待接入 -->
@@ -63,10 +63,14 @@
         <button class="banner-close" id="loginClose" title="关闭">×</button>
       </div>
       <p class="modal-sub">首次登录将自动为你创建账号</p>
+      <div class="channel-tabs">
+        <button type="button" class="channel-tab active" id="tabSms">手机号</button>
+        <button type="button" class="channel-tab" id="tabEmail">邮箱</button>
+      </div>
       <form id="loginForm" novalidate>
         <label class="form-field">
-          <span>手机号</span>
-          <input type="tel" id="phoneInput" maxlength="11" inputmode="numeric" autocomplete="tel" placeholder="请输入 11 位手机号">
+          <span id="targetLabel">手机号</span>
+          <input type="text" id="targetInput" maxlength="100" autocomplete="username" placeholder="请输入 11 位手机号">
         </label>
         <label class="form-field">
           <span>验证码</span>
@@ -114,6 +118,6 @@
     </div>
   </div>
 
-  <script src="app.js?v=20261026"></script>
+  <script src="app.js?v=20261027"></script>
 </body>
 </html>
