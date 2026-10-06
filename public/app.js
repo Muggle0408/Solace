@@ -485,11 +485,24 @@ if (bgmListEl) {
 
 // ---------- 账号系统：右上角动物头像 + 下拉菜单（游客模式不受影响） ----------
 
+// 引用语：随主题固定（不再轮换）——森林 / 都市 各一句
+const THEME_QUOTES = {
+  forest: '“我的朋友是生活本身。”',
+  city: '“你只是情绪走进了死胡同，不是人生走进了死胡同。”'
+};
+
+function updateQuote() {
+  const el = document.getElementById('quoteLine');
+  if (!el) return;
+  el.textContent = document.body.classList.contains('theme-city') ? THEME_QUOTES.city : THEME_QUOTES.forest;
+}
+
 // 主题：默认暗夜森林；头像左侧分段按钮切换「白天/夜晚」，localStorage 记忆
 function setTheme(light) {
   document.body.classList.toggle('theme-city', light);
   localStorage.setItem('solace-theme', light ? 'light' : 'dark');
   updateThemeToggle();
+  updateQuote();
 }
 
 function updateThemeToggle() {
@@ -501,6 +514,7 @@ function updateThemeToggle() {
 (function applySavedTheme() {
   if (localStorage.getItem('solace-theme') === 'light') document.body.classList.add('theme-city');
   updateThemeToggle();
+  updateQuote();
 })();
 
 document.getElementById('themeToggle').addEventListener('click', (e) => {
@@ -508,20 +522,7 @@ document.getElementById('themeToggle').addEventListener('click', (e) => {
   if (btn) setTheme(btn.dataset.theme === 'light');
 });
 
-// 引用语：每次加载随机一句（衬线、奶油白、居中）
-const QUOTES = [
-  { text: '我的朋友是生活本身。', author: '李娟' },
-  { text: '万物皆有裂痕，那是光照进来的地方。', author: '莱昂纳德·科恩' },
-  { text: '你只是情绪走进了死胡同，不是人生走进了死胡同。', author: '佚名' },
-  { text: '允许一切发生，包括允许自己暂时不好。', author: '佚名' },
-  { text: '夜晚不是结束，是万物在深呼吸。', author: '情绪空间' }
-];
-(function showQuote() {
-  const el = document.getElementById('quoteLine');
-  if (!el) return;
-  const q = QUOTES[Math.floor(Math.random() * QUOTES.length)];
-  el.textContent = `“${q.text}” —— ${q.author}`;
-})();
+// 引用语由 updateQuote() 按主题渲染（见上方主题区）
 
 const AVATAR_GUEST = '🐾';
 const ANIMAL_AVATARS = ['🦊', '🐰', '🐱', '🐻', '🐼', '🦉', '🐳', '🦌', '🐿️', '🐸'];
