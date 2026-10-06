@@ -50,50 +50,39 @@ body.theme-light {
 
 .hidden { display: none !important; }
 
-/* ---------- 背景场景：色阶 + 多层树影 + 雾带 + 暗角 + 噪点 ---------- */
+/* ---------- 背景场景：松林草甸照片 + 暗角 + 噪点 ---------- */
 .bg-photo {
   position: fixed;
   inset: 0;
   z-index: 0;
   pointer-events: none;
-  /* 色阶：顶 #141f18 → 中 #1d2f22 → 底 #0e1712 */
-  background: linear-gradient(180deg, #141f18 0%, #1d2f22 45%, #16241b 72%, #0e1712 100%);
+  background: url('bg-forest.jpg') center / cover no-repeat;
 }
 
-/* 远景树影（浅、虚）+ 中部雾带 */
+/* 压暗渐变：保住暗色氛围与文字可读性（照片本身偏亮） */
 .bg-photo::before {
   content: "";
   position: absolute;
   inset: 0;
-  background-image:
-    linear-gradient(180deg,
-      transparent 34%,
-      rgba(196, 220, 202, 0.07) 44%,
-      rgba(196, 220, 202, 0.11) 51%,
-      rgba(196, 220, 202, 0.05) 60%,
-      transparent 70%),
-    url("data:image/svg+xml,%3Csvg%20xmlns%3D'http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg'%20viewBox%3D'0%200%201600%20900'%20preserveAspectRatio%3D'xMidYMax%20slice'%3E%3Cpath%20fill%3D'%232f4a37'%20d%3D'M89%20900%20L110%20560%20L131%20900%20ZM106%20747%20h8%20V900%20h-8%20ZM223.2%20900%20L240%20650%20L256.8%20900%20ZM236%20787.5%20h8%20V900%20h-8%20ZM334.8%20900%20L360%20540%20L385.2%20900%20ZM356%20738%20h8%20V900%20h-8%20ZM484.88%20900%20L500%20700%20L515.12%20900%20ZM496%20810%20h8%20V900%20h-8%20ZM596.9%20900%20L620%20580%20L643.1%20900%20ZM616%20756%20h8%20V900%20h-8%20ZM741.52%20900%20L760%20640%20L778.48%20900%20ZM756%20783%20h8%20V900%20h-8%20ZM873.96%20900%20L900%20520%20L926.04%20900%20ZM896%20729%20h8%20V900%20h-8%20ZM1023.2%20900%20L1040%20660%20L1056.8%20900%20ZM1036%20792%20h8%20V900%20h-8%20ZM1148.16%20900%20L1170%20590%20L1191.84%20900%20ZM1166%20760.5%20h8%20V900%20h-8%20ZM1284.04%20900%20L1300%20690%20L1315.96%20900%20ZM1296%20805.5%20h8%20V900%20h-8%20ZM1405.64%20900%20L1430%20560%20L1454.36%20900%20ZM1426%20747%20h8%20V900%20h-8%20ZM1521.1%20900%20L1540%20640%20L1558.9%20900%20ZM1536%20783%20h8%20V900%20h-8%20Z'%2F%3E%3C%2Fsvg%3E");
-  background-repeat: no-repeat, no-repeat;
-  background-position: center, center bottom;
-  background-size: 100% 100%, min(1600px, 140vw) auto;
-  opacity: 0.75;
-  filter: blur(7px);
-  transform: scale(1.06); /* 模糊收边 */
+  background: linear-gradient(180deg,
+    rgba(14, 23, 18, 0.5) 0%,
+    rgba(14, 23, 18, 0.22) 30%,
+    rgba(14, 23, 18, 0.18) 55%,
+    rgba(14, 23, 18, 0.55) 100%);
 }
 
-/* 近景树影（深、轮廓稍清） */
+/* 中部雾带 + 暗角 */
 .bg-photo::after {
   content: "";
   position: absolute;
   inset: 0;
-  background-image:
-    radial-gradient(ellipse 120% 90% at 50% 46%, transparent 55%, rgba(4, 8, 6, 0.55) 100%),
-    url("data:image/svg+xml,%3Csvg%20xmlns%3D'http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg'%20viewBox%3D'0%200%201600%20900'%20preserveAspectRatio%3D'xMidYMax%20slice'%3E%3Cpath%20fill%3D'%230f1b13'%20d%3D'M2.200000000000003%20900%20L40%20430%20L77.8%20900%20ZM36%20688.5%20h8%20V900%20h-8%20ZM230.6%20900%20L260%20520%20L289.4%20900%20ZM256%20729%20h8%20V900%20h-8%20ZM440.1%20900%20L480%20400%20L519.9%20900%20ZM476%20675%20h8%20V900%20h-8%20ZM692.28%20900%20L720%20540%20L747.72%20900%20ZM716%20738%20h8%20V900%20h-8%20ZM913.04%20900%20L950%20460%20L986.96%20900%20ZM946%20702%20h8%20V900%20h-8%20ZM1170.6%20900%20L1200%20530%20L1229.4%20900%20ZM1196%20733.5%20h8%20V900%20h-8%20ZM1383.88%20900%20L1420%20440%20L1456.12%20900%20ZM1416%20693%20h8%20V900%20h-8%20ZM1574.8%20900%20L1600%20520%20L1625.2%20900%20ZM1596%20729%20h8%20V900%20h-8%20Z'%2F%3E%3C%2Fsvg%3E");
-  background-repeat: no-repeat, no-repeat;
-  background-position: center, center bottom;
-  background-size: 100% 100%, min(1600px, 150vw) auto;
-  opacity: 0.9;
-  filter: blur(1.5px);
+  background:
+    linear-gradient(180deg,
+      transparent 38%,
+      rgba(214, 230, 216, 0.06) 47%,
+      rgba(214, 230, 216, 0.09) 53%,
+      transparent 64%),
+    radial-gradient(ellipse 120% 90% at 50% 46%, transparent 52%, rgba(4, 8, 6, 0.5) 100%);
 }
 
 /* 噪点层（空气感） */
