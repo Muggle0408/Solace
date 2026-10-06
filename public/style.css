@@ -403,6 +403,22 @@ body.theme-city .bg-photo::after {
   animation: pulse 1.2s ease-in-out infinite;
 }
 
+.mic-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  flex-shrink: 0;
+}
+
+.mic-hint {
+  font-size: 10px;
+  color: var(--text-dim);
+  line-height: 1;
+  white-space: nowrap;
+}
+
 @keyframes pulse {
   0%, 100% { box-shadow: 0 0 0 0 rgba(217, 160, 138, 0.4); }
   50% { box-shadow: 0 0 0 10px rgba(217, 160, 138, 0); }
@@ -880,6 +896,52 @@ body.theme-city .bg-photo::after {
 .bgm-label { font-size: 11px; color: var(--text-dim); }
 .bgm-item.active .bgm-label { color: var(--text); }
 
+/* ---------- 语音播报开关（左上角） ---------- */
+.tts-panel {
+  position: fixed;
+  left: 16px;
+  top: 16px;
+  z-index: 2;
+  width: 92px;
+  padding: 12px 10px;
+  background: var(--bg-card);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  border: 1px solid var(--border);
+  border-radius: 16px;
+  box-shadow: 0 10px 32px var(--shadow);
+  text-align: center;
+}
+
+.tts-seg-group {
+  display: flex;
+  gap: 3px;
+  padding: 3px;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+}
+
+.tts-seg {
+  flex: 1;
+  padding: 5px 0;
+  border: none;
+  border-radius: 999px;
+  background: none;
+  font-size: 12px;
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: all .3s ease;
+}
+
+.tts-seg:hover { color: var(--text); }
+
+.tts-seg.active {
+  background: var(--hover-fill);
+  color: var(--text);
+  box-shadow: 0 0 0 1px var(--border-strong);
+}
+
 /* ---------- 窄屏适配 ---------- */
 @media (max-width: 900px) {
   .bgm-panel {
@@ -890,6 +952,7 @@ body.theme-city .bg-photo::after {
   .bgm-title { margin-bottom: 0; flex-shrink: 0; }
   .bgm-list { flex-direction: row; gap: 8px; overflow-x: auto; }
   .bgm-circle { width: 40px; height: 40px; font-size: 17px; }
+  .tts-panel { left: 10px; top: 10px; width: auto; min-width: 76px; padding: 8px; }
 }
 
 @media (max-width: 480px) {

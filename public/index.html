@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>情绪空间 · 高敏感人群情绪疏导</title>
-  <link rel="stylesheet" href="style.css?v=20261037">
+  <link rel="stylesheet" href="style.css?v=20261038">
 </head>
 <body>
   <!-- 背景：暗夜森林（色阶渐变 + 多层树影 + 雾带 + 暗角）；噪点空气感层 -->
@@ -15,6 +15,15 @@
   <aside class="bgm-panel" id="bgmPanel" aria-label="背景音乐">
     <div class="bgm-title">背景音乐</div>
     <div class="bgm-list" id="bgmList"></div>
+  </aside>
+
+  <!-- 左上角：AI 回复自动语音播报开关（记忆用户选择） -->
+  <aside class="tts-panel" aria-label="语音播报开关">
+    <div class="bgm-title">语音播报</div>
+    <div class="tts-seg-group" role="group" aria-label="自动播报开关">
+      <button class="tts-seg" data-tts="on">开</button>
+      <button class="tts-seg" data-tts="off">关</button>
+    </div>
   </aside>
 
   <div class="app">
@@ -45,7 +54,10 @@
     <div class="input-area">
       <div class="options" id="options"></div>
       <div class="text-input-row">
-        <button id="micBtn" class="icon-btn" title="语音输入">🎤</button>
+        <div class="mic-wrap">
+          <button id="micBtn" class="icon-btn" title="语音输入">🎤</button>
+          <span class="mic-hint">语音输入</span>
+        </div>
         <input type="text" id="userInput" placeholder="输入你想说的话..." autocomplete="off">
         <button id="sendBtn">发送</button>
       </div>
@@ -126,6 +138,6 @@
     </div>
   </div>
 
-  <script src="app.js?v=20261037"></script>
+  <script src="app.js?v=20261038"></script>
 </body>
 </html>

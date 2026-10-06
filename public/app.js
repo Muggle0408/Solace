@@ -6,6 +6,23 @@ const micBtn = document.getElementById('micBtn');
 const crisisBanner = document.getElementById('crisisBanner');
 const crisisNumbers = document.getElementById('crisisNumbers');
 
+// AI 回复自动语音播报：全局开关，localStorage 记忆用户选择（默认开）
+const TTS_AUTO_KEY = 'ttsAuto';
+let ttsAuto = localStorage.getItem(TTS_AUTO_KEY) !== 'off';
+const ttsSegBtns = document.querySelectorAll('.tts-seg');
+
+function renderTtsToggle() {
+  ttsSegBtns.forEach(b => b.classList.toggle('active', (b.dataset.tts === 'on') === ttsAuto));
+}
+
+ttsSegBtns.forEach(b => b.addEventListener('click', () => {
+  ttsAuto = b.dataset.tts === 'on';
+  localStorage.setItem(TTS_AUTO_KEY, ttsAuto ? 'on' : 'off');
+  renderTtsToggle();
+  if (!ttsAuto) stopSpeaking(); // 关闭时立即停止正在进行的播报
+}));
+renderTtsToggle();
+
 let startRating = null;
 let endRating = null;
 let history = []; // 对话历史，后端从中恢复当前阶段
@@ -63,8 +80,8 @@ function addMessage(text, sender, stage = null, dbId = null, opts = {}) {
     actions.appendChild(buildFeedbackBar(text, stage, dbId));
     msgDiv.appendChild(actions);
 
-    // 自动播放：新回复到达即朗读（恢复历史除外；点播放图标可停止/重播）
-    if (!opts.silent) toggleSpeak(text, ttsBtn);
+    // 自动播放：新回复到达即朗读（恢复历史除外；全局开关关闭时不播；点播放图标可停止/重播）
+    if (!opts.silent && ttsAuto) toggleSpeak(text, ttsBtn);
   }
 
   chatContainer.appendChild(msgDiv);
