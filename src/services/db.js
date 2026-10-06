@@ -112,4 +112,21 @@ if (!vcColNames.includes('channel')) {
 }
 db.exec(`CREATE INDEX IF NOT EXISTS idx_vc_target ON verification_codes(target, channel, id)`);
 
+// ---- RAG 知识库：知识块 + 向量（Float32 LE 字节存储，余弦相似度在应用层计算）----
+db.exec(`
+CREATE TABLE IF NOT EXISTS kb_chunks (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  layer TEXT NOT NULL,                -- hsp | intervention | basic
+  title TEXT NOT NULL,
+  stages TEXT,                        -- 逗号分隔的适用阶段码
+  content TEXT NOT NULL,
+  content_hash TEXT UNIQUE NOT NULL,
+  embedding BLOB,                     -- Float32Array 字节
+  dims INTEGER,
+  source TEXT,                        -- 来源文件名
+  updated_at TEXT DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_kb_layer ON kb_chunks(layer);
+`);
+
 module.exports = db;

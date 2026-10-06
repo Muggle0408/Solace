@@ -19,6 +19,8 @@ process.env.SMTP_USER = '';
 process.env.SMTP_PASS = '';
 process.env.SMS_RESEND_COOLDOWN_SEC = '1';
 process.env.CODE_SEND_DAILY_MAX_PER_IP = '3';
+// RAG：强制 mock 向量（测试离线可跑，不依赖 embedding 密钥）
+process.env.EMBEDDING_PROVIDER = 'mock';
 
 const { describe, it } = require('node:test');
 const assert = require('node:assert');
@@ -417,5 +419,65 @@ describe('对话落库与历史恢复', () => {
       .send({ messageId: 'mguest123', stage: 'check_in', vote: 'up' })
       .expect(200);
     assert.strictEqual(res.body.persistedToDb, false);
+  });
+});
+
+describe('RAG 知识库', () => {
+  const fs = require('fs');
+  const os = require('os');
+  const path = require('path');
+  const { parseKnowledgeFile, ingestKnowledgeDir } = require('../src/services/kbIngestor');
+  const { retrieveKnowledge, kbSize } = require('../src/services/kbRetriever');
+  const { buildPrompt } = require('../src/engine/llmResponder');
+
+  it('语料解析：三个文件 ≥15 块，每块带标题/阶段/正文', () => {
+    const dir = path.join(__dirname, '..', 'knowledge');
+    const files = fs.readdirSync(dir).filter((f) => f.endsWith('.md'));
+    assert.strictEqual(files.length, 3);
+    let total = 0;
+    for (const f of files) {
+      const blocks = parseKnowledgeFile(path.join(dir, f));
+      assert.ok(blocks.length >= 4, `${f} 至少 4 块`);
+      for (const b of blocks) {
+        assert.ok(b.title.length > 0);
+        assert.ok(b.stages.length > 0);
+        assert.ok(b.content.length >= 100, `${b.title} 正文过短`);
+      }
+      total += blocks.length;
+    }
+    assert.ok(total >= 15, `总块数 ${total} 应 ≥15`);
+  });
+
+  it('入库（mock 向量）后可检索，阶段加权生效', async () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'kb-test-'));
+    fs.writeFileSync(path.join(dir, '2-test.md'), [
+      '# 测试干预层',
+      '',
+      '## 呼吸练习 | stages: regulation',
+      '四七八呼吸法：吸气四秒、屏息七秒、呼气八秒，适合情绪回落期使用，先征得用户同意再引导，不做超过五轮。',
+      '',
+      '## 认知解离 | stages: awareness',
+      '帮助用户区分事实与解读，用两部分句式切开事实和大脑补出来的剧情，让用户自己完成区分。',
+      ''
+    ].join('\n'));
+
+    const stats = await ingestKnowledgeDir(dir);
+    assert.strictEqual(stats.blocks, 2);
+    assert.strictEqual(kbSize(), 2);
+
+    const q = '我现在很紧张，能带我做呼吸练习吗';
+    const hitsReg = await retrieveKnowledge(q, 'regulation');
+    assert.strictEqual(hitsReg[0].title, '呼吸练习');
+
+    const hitsAwa = await retrieveKnowledge(q, 'awareness');
+    assert.ok(hitsReg[0].score >= hitsAwa[0].score, '阶段加权应使 regulation 得分不低于 awareness');
+  });
+
+  it('prompt 注入：有知识块出现【可参考的专业依据】区块，无则不含', () => {
+    const withKb = buildPrompt('测试', 'awareness', [],
+      [{ layer: 'intervention', title: '呼吸练习', content: '4-7-8 呼吸法' }]);
+    assert.ok(withKb.includes('【可参考的专业依据】'));
+    const withoutKb = buildPrompt('测试', 'awareness', []);
+    assert.ok(!withoutKb.includes('【可参考的专业依据】'));
   });
 });

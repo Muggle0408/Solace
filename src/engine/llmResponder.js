@@ -1,6 +1,7 @@
 const { chatCompletion } = require('../services/llmClient');
 const { isValidTransition } = require('../config/stages');
 const { getFewShotExamples } = require('../config/fewShots');
+const { retrieveKnowledge } = require('../services/kbRetriever');
 
 // 阶段卡片：描述当前阶段的目标与边界，不给固定话术
 const STAGE_CARDS = {
@@ -192,8 +193,28 @@ function formatHistory(history = []) {
   return history.slice(-6).map(h => `${h.role}: ${h.content}`).join('\n');
 }
 
+// 格式化检索到的知识块（RAG 注入区）
+function formatKbBlocks(kbBlocks = []) {
+  if (!kbBlocks.length) return '';
+  const items = kbBlocks.map((b) => {
+    const layerName = { hsp: 'HSP专项', intervention: '干预技术', basic: '基础心理' }[b.layer] || b.layer;
+    return `【${layerName} · ${b.title}】\n${b.content}`;
+  }).join('\n\n');
+  return `
+【可参考的专业依据】
+以下是与用户当前状态相关的专业知识片段，供你组织回复时参考：
+
+${items}
+
+重要边界：以上内容只是专业参考，帮你理解用户的心理机制。
+- 不要直接向用户罗列概念名词或术语（不说"这是认知解离/灾难化思维"这类标签，要用大白话表达）。
+- 不要引用原文句式，用自己的温暖、口语化的话回应。
+- 内容与阶段目标冲突时，一律以阶段目标和安全约束为准。
+`;
+}
+
 // 构建完整 Prompt
-function buildPrompt(message, currentStage, history = []) {
+function buildPrompt(message, currentStage, history = [], kbBlocks = []) {
   const stageCard = STAGE_CARDS[currentStage] || STAGE_CARDS.welcome;
   const fewShotExamples = getFewShotExamples(currentStage);
 
@@ -211,7 +232,7 @@ ${STAGE_GUIDE}
 ${DIALOGUE_STYLE_GUIDE}
 
 ${SAFETY_CONSTRAINTS}
-
+${formatKbBlocks(kbBlocks)}
 【高质量回复参考示例】
 以下是针对类似场景的高质量对话示例，供你参考语气和节奏（不是让你照搬，而是学习其中的回应方式）：
 
@@ -281,7 +302,19 @@ function validateResponse(response, currentStage, message = '') {
 async function generateResponse(message, currentStage, history = []) {
   // 避免空用户消息导致 API 报错
   const safeMessage = message && message.trim() ? message.trim() : '（用户未输入文字）';
-  const prompt = buildPrompt(safeMessage, currentStage, history);
+
+  // RAG 检索：危机阶段不检索（该路径实际已被 chatEngine 的规则门拦截，双保险）；
+  // 检索失败静默降级为无知识注入，不影响主流程
+  let kbBlocks = [];
+  if (currentStage !== 'crisis') {
+    try {
+      kbBlocks = await retrieveKnowledge(safeMessage, currentStage);
+    } catch (err) {
+      console.warn('[RAG] 检索失败，降级为无知识注入:', err.message);
+    }
+  }
+
+  const prompt = buildPrompt(safeMessage, currentStage, history, kbBlocks);
 
   const rawContent = await chatCompletion([
     { role: 'system', content: prompt },
