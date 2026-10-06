@@ -4,7 +4,7 @@ const crypto = require('crypto');
 const axios = require('axios');
 
 const PROVIDER = process.env.EMBEDDING_PROVIDER
-  || (process.env.EMBEDDING_API_KEY ? 'siliconflow' : 'mock');
+  || (process.env.EMBEDDING_API_KEY ? 'custom' : 'mock');
 const BASE_URL = process.env.EMBEDDING_BASE_URL || 'https://api.siliconflow.cn/v1';
 const MODEL = process.env.EMBEDDING_MODEL || 'BAAI/bge-m3';
 const MOCK_DIMS = 256;

@@ -7,7 +7,7 @@ const { isConfigured, PROVIDER, MODEL } = require('../src/services/embeddingClie
 const dir = process.argv[2] || path.join(__dirname, '..', 'knowledge');
 
 (async () => {
-  console.log(`[ingest] 目录: ${dir} | embedding: ${PROVIDER}${isConfigured() ? ` (${MODEL})` : ' (mock 模式)'}`);
+  console.log(`[ingest] 目录: ${dir} | embedding: ${PROVIDER} → ${BASE_URL.replace('https://', '')} (${MODEL})`);
   const stats = await ingestKnowledgeDir(dir);
   console.log(`[ingest] 完成：${stats.files} 个文件，${stats.blocks} 个知识块，新向量化 ${stats.embedded} 块`);
   if (!isConfigured()) {

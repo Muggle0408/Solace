@@ -10,7 +10,9 @@ const TOP_K = Number(process.env.KB_TOP_K) || 4;
 
 (async () => {
   const cases = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'eval', 'kb-eval.json'), 'utf8'));
-  console.log(`[eval] ${cases.length} 题 | top-K=${TOP_K} | embedding=${PROVIDER}${isConfigured() ? '' : '（mock，结果不代表真实水平）'}`);
+  const baseHost = new URL(process.env.EMBEDDING_BASE_URL || 'https://api.siliconflow.cn/v1').host;
+  const modelName = process.env.EMBEDDING_MODEL || 'BAAI/bge-m3';
+  console.log(`[eval] ${cases.length} 题 | top-K=${TOP_K} | embedding: ${PROVIDER} → ${baseHost} (${modelName})${isConfigured() ? '' : '（mock，结果不代表真实水平）'}`);
   if (!kbSize()) {
     console.error('[eval] 知识库为空，请先运行 node scripts/ingest-kb.js');
     process.exit(1);
