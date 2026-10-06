@@ -487,19 +487,19 @@ if (bgmListEl) {
 
 // 主题：默认暗夜森林；头像左侧分段按钮切换「白天/夜晚」，localStorage 记忆
 function setTheme(light) {
-  document.body.classList.toggle('theme-light', light);
+  document.body.classList.toggle('theme-city', light);
   localStorage.setItem('solace-theme', light ? 'light' : 'dark');
   updateThemeToggle();
 }
 
 function updateThemeToggle() {
-  const light = document.body.classList.contains('theme-light');
+  const light = document.body.classList.contains('theme-city');
   document.querySelectorAll('.theme-opt').forEach((b) =>
     b.classList.toggle('active', (b.dataset.theme === 'light') === light));
 }
 
 (function applySavedTheme() {
-  if (localStorage.getItem('solace-theme') === 'light') document.body.classList.add('theme-light');
+  if (localStorage.getItem('solace-theme') === 'light') document.body.classList.add('theme-city');
   updateThemeToggle();
 })();
 

@@ -1,7 +1,7 @@
 /* ============================================================
    情绪空间 · 暗夜森林版（对标 MOONDUST）
    深橄榄绿夜林背景 + 暗色玻璃拟态 + 奶油白细字
-   双主题：默认暗夜森林；body.theme-light = 低刺激浅色模式
+   双主题：默认暗夜森林；body.theme-city = 都市夜间模式（纽约夜景）
    ============================================================ */
 
 * {
@@ -34,18 +34,18 @@ body {
   background: #0e1712;
 }
 
-body.theme-light {
-  --bg-card: rgba(255, 255, 255, 0.85);
-  --bg-card-strong: rgba(255, 255, 255, 0.95);
-  --bg-input: rgba(255, 255, 255, 0.78);
-  --border: #c3d2e8;
-  --border-strong: #7d90ad;
-  --text: #33415c;
-  --text-dim: #6d7f99;
-  --hover-fill: rgba(255, 255, 255, 0.95);
-  --user-bubble: #4a678f;
-  --shadow: rgba(74, 104, 156, 0.18);
-  background: #e8f3ff;
+body.theme-city {
+  --bg-card: rgba(12, 14, 22, 0.72);
+  --bg-card-strong: rgba(12, 14, 22, 0.88);
+  --bg-input: rgba(8, 10, 16, 0.55);
+  --border: rgba(240, 236, 226, 0.16);
+  --border-strong: rgba(240, 236, 226, 0.4);
+  --text: #f2eee4;
+  --text-dim: rgba(242, 238, 228, 0.6);
+  --hover-fill: rgba(240, 236, 226, 0.09);
+  --user-bubble: rgba(0, 0, 0, 0.35);
+  --shadow: rgba(0, 0, 0, 0.5);
+  background: #0a0c14;
 }
 
 .hidden { display: none !important; }
@@ -96,18 +96,16 @@ body.theme-light {
   background-size: 260px 260px;
 }
 
-/* 浅色模式背景：回归水彩底图 */
-body.theme-light .bg-photo {
-  background: url('bg.jpg') center / cover no-repeat,
-    linear-gradient(180deg, #ffffff 0%, #e8f3ff 45%, #9cccf7 100%);
+/* 都市模式背景：纽约夜景 + 20% 黑色滤镜 + 暗角 */
+body.theme-city .bg-photo {
+  background: url('bg-city.jpg') center / cover no-repeat;
 }
-body.theme-light .bg-photo::before { opacity: 0; }
-body.theme-light .bg-photo::after {
-  background: radial-gradient(ellipse 120% 90% at 50% 46%, transparent 60%, rgba(30, 50, 80, 0.18) 100%);
-  opacity: 1;
-  filter: none;
+body.theme-city .bg-photo::before {
+  background: rgba(0, 0, 0, 0.2);
 }
-body.theme-light .noise-layer { opacity: 0.03; }
+body.theme-city .bg-photo::after {
+  background: radial-gradient(ellipse 120% 90% at 50% 46%, transparent 52%, rgba(2, 4, 10, 0.5) 100%);
+}
 
 /* ---------- 布局骨架 ---------- */
 .app {
@@ -216,13 +214,6 @@ body.theme-light .noise-layer { opacity: 0.03; }
   border: 1.5px solid #000;
   color: #fff;
   border-bottom-right-radius: 6px;
-}
-
-/* 浅色低刺激模式：用户气泡回归实心蓝 */
-body.theme-light .message.user .bubble {
-  background: var(--user-bubble);
-  border-color: transparent;
-  color: #fff;
 }
 
 /* ---------- 回复操作栏：朗读 + 反馈 ---------- */
@@ -388,13 +379,6 @@ body.theme-light .message.user .bubble {
   border-color: var(--text);
 }
 
-body.theme-light #sendBtn {
-  background: var(--user-bubble);
-  border-color: var(--user-bubble);
-  color: #fff;
-}
-body.theme-light #sendBtn:hover { background: #3d5680; }
-
 /* ---------- 语音按钮 ---------- */
 .icon-btn {
   width: 46px;
@@ -506,8 +490,6 @@ body.theme-light #sendBtn:hover { background: #3d5680; }
   justify-content: center;
   padding: 16px;
 }
-
-body.theme-light .modal-mask { background: rgba(51, 65, 92, 0.35); }
 
 .modal-card {
   width: 100%;
@@ -629,13 +611,6 @@ body.theme-light .modal-mask { background: rgba(51, 65, 92, 0.35); }
 
 .form-submit:hover { background: var(--hover-fill); border-color: var(--text); }
 .form-submit:disabled { opacity: 0.5; cursor: not-allowed; }
-
-body.theme-light .form-submit {
-  background: var(--user-bubble);
-  border-color: var(--user-bubble);
-  color: #fff;
-}
-body.theme-light .form-submit:hover { background: #3d5680; }
 
 /* ---------- 个人中心 ---------- */
 .profile-phone {
