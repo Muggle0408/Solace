@@ -485,6 +485,32 @@ if (bgmListEl) {
 
 // ---------- 账号系统：右上角动物头像 + 下拉菜单（游客模式不受影响） ----------
 
+// 主题：默认暗夜森林；可切「低刺激浅色模式」，localStorage 记忆
+(function applySavedTheme() {
+  if (localStorage.getItem('solace-theme') === 'light') document.body.classList.add('theme-light');
+})();
+
+function toggleTheme() {
+  const light = document.body.classList.toggle('theme-light');
+  localStorage.setItem('solace-theme', light ? 'light' : 'dark');
+  updateAuthUI(); // 重新渲染菜单以更新切换项文案
+}
+
+// 引用语：每次加载随机一句（衬线、奶油白、居中）
+const QUOTES = [
+  { text: '我的朋友是生活本身。', author: '李娟' },
+  { text: '万物皆有裂痕，那是光照进来的地方。', author: '莱昂纳德·科恩' },
+  { text: '你只是情绪走进了死胡同，不是人生走进了死胡同。', author: '佚名' },
+  { text: '允许一切发生，包括允许自己暂时不好。', author: '佚名' },
+  { text: '夜晚不是结束，是万物在深呼吸。', author: '情绪空间' }
+];
+(function showQuote() {
+  const el = document.getElementById('quoteLine');
+  if (!el) return;
+  const q = QUOTES[Math.floor(Math.random() * QUOTES.length)];
+  el.textContent = `“${q.text}” —— ${q.author}`;
+})();
+
 const AVATAR_GUEST = '🐾';
 const ANIMAL_AVATARS = ['🦊', '🐰', '🐱', '🐻', '🐼', '🦉', '🐳', '🦌', '🐿️', '🐸'];
 
@@ -549,6 +575,12 @@ function renderAccountMenu() {
     items.push({ icon: '👤', label: '账号登录', onClick: openLoginModal });
     items.push({ icon: '✨', label: '新对话', onClick: startNewConversationWithNote });
   }
+  const isLight = document.body.classList.contains('theme-light');
+  items.push({
+    icon: isLight ? '🌙' : '☀️',
+    label: isLight ? '暗夜森林模式' : '低刺激浅色模式',
+    onClick: toggleTheme
+  });
   accountMenu.innerHTML = '';
   items.forEach(({ icon, label, onClick }) => {
     const btn = document.createElement('button');

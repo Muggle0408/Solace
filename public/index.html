@@ -4,11 +4,12 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>情绪空间 · 高敏感人群情绪疏导</title>
-  <link rel="stylesheet" href="style.css?v=20261028">
+  <link rel="stylesheet" href="style.css?v=20261029">
 </head>
 <body>
-  <!-- 背景：油画风白蓝幕布（上白下蓝自然过渡，带油画颗粒）；透明底蝴蝶素材待接入 -->
+  <!-- 背景：暗夜森林（色阶渐变 + 多层树影 + 雾带 + 暗角）；噪点空气感层 -->
   <div class="bg-photo" aria-hidden="true"></div>
+  <div class="noise-layer" aria-hidden="true"></div>
 
   <!-- 左侧：背景音乐选择面板（蓝白调，圆形按键） -->
   <aside class="bgm-panel" id="bgmPanel" aria-label="背景音乐">
@@ -21,6 +22,8 @@
       <h1>情绪空间</h1>
       <p class="subtitle">一个给高敏感人群的安全角落</p>
     </header>
+
+    <div class="quote-line" id="quoteLine"></div>
 
     <div class="auth-banner hidden" id="authBanner">
       <span>登录后可以保留对话与记忆，换设备也能继续。</span>
@@ -114,6 +117,6 @@
     </div>
   </div>
 
-  <script src="app.js?v=20261028"></script>
+  <script src="app.js?v=20261029"></script>
 </body>
 </html>
