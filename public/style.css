@@ -223,9 +223,17 @@ body.theme-light .noise-layer { opacity: 0.03; }
 }
 
 .message.user .bubble {
-  background: var(--user-bubble);
-  color: #f5efe4;
+  background: rgba(0, 0, 0, 0.3);
+  border: 1.5px solid #000;
+  color: #fff;
   border-bottom-right-radius: 6px;
+}
+
+/* 浅色低刺激模式：用户气泡回归实心蓝 */
+body.theme-light .message.user .bubble {
+  background: var(--user-bubble);
+  border-color: transparent;
+  color: #fff;
 }
 
 /* ---------- 回复操作栏：朗读 + 反馈 ---------- */
@@ -716,7 +724,7 @@ body.theme-light .form-submit:hover { background: #3d5680; }
 /* ---------- 账号区（右上角头像） ---------- */
 .account-area {
   position: fixed;
-  right: 16px;
+  right: 26px;
   top: 16px;
   z-index: 3;
   display: flex;
@@ -726,15 +734,15 @@ body.theme-light .form-submit:hover { background: #3d5680; }
 }
 
 .avatar-btn {
-  width: 48px;
-  height: 48px;
+  width: 56px;
+  height: 56px;
   border-radius: 50%;
   border: 1px solid var(--border);
   background: var(--bg-card);
   backdrop-filter: blur(18px);
   -webkit-backdrop-filter: blur(18px);
   box-shadow: 0 8px 24px var(--shadow);
-  font-size: 24px;
+  font-size: 27px;
   cursor: pointer;
   transition: all .3s ease;
   display: flex;
