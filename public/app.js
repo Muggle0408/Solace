@@ -574,6 +574,14 @@ function updateAuthBanner() {
 
 function updateAvatarBtn() {
   avatarBtn.textContent = (currentUser && currentUser.avatar) || AVATAR_GUEST;
+  const label = document.getElementById('avatarLabel');
+  if (label) {
+    const name = currentUser
+      ? (currentUser.nickname || currentUser.email || currentUser.phone || '朋友')
+      : '待登录/注册';
+    label.textContent = name;
+    label.title = name;
+  }
 }
 
 function renderAccountMenu() {
