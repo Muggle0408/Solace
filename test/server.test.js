@@ -233,7 +233,11 @@ describe('语音合成', () => {
 
 describe('账号系统（多通道验证码）', () => {
   it('非法格式与不支持的通道被拒', async () => {
-    await requestCode(request(app), 'sms', '123').expect(400);
+    // 短信通道未配置密钥 → 明确拒绝
+    const disabled = await requestCode(request(app), 'sms', uniquePhone());
+    assert.strictEqual(disabled.status, 400);
+    assert.strictEqual(disabled.body.error, 'CHANNEL_DISABLED');
+
     await requestCode(request(app), 'email', 'not-an-email').expect(400);
     await requestCode(request(app), 'wechat', 'whatever').expect(400);
     const agent = request.agent(app);
@@ -289,18 +293,6 @@ describe('账号系统（多通道验证码）', () => {
     await new Promise((r) => setTimeout(r, 1100));
     const agentB = request.agent(app);
     const again = await loginUser(agentB, 'email', email);
-    assert.strictEqual(again.isNew, false);
-    assert.strictEqual(again.user.id, first.user.id);
-  });
-
-  it('手机号通道同样建立唯一账号', async () => {
-    const phone = uniquePhone();
-    const first = await loginUser(request.agent(app), 'sms', phone);
-    assert.strictEqual(first.isNew, true);
-    assert.strictEqual(first.user.phone, phone.slice(0, 3) + '****' + phone.slice(7));
-
-    await new Promise((r) => setTimeout(r, 1100));
-    const again = await loginUser(request.agent(app), 'sms', phone);
     assert.strictEqual(again.isNew, false);
     assert.strictEqual(again.user.id, first.user.id);
   });

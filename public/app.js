@@ -496,10 +496,7 @@ const bannerClose = document.getElementById('bannerClose');
 const loginModal = document.getElementById('loginModal');
 const loginClose = document.getElementById('loginClose');
 const loginForm = document.getElementById('loginForm');
-const targetLabel = document.getElementById('targetLabel');
 const targetInput = document.getElementById('targetInput');
-const tabSms = document.getElementById('tabSms');
-const tabEmail = document.getElementById('tabEmail');
 const codeInput = document.getElementById('codeInput');
 const sendCodeBtn = document.getElementById('sendCodeBtn');
 const loginError = document.getElementById('loginError');
@@ -518,18 +515,11 @@ const historyClose = document.getElementById('historyClose');
 
 let selectedAvatar = null;
 let codeTimer = null;
-let loginChannel = 'sms'; // 'sms' | 'email'
+const loginChannel = 'email'; // 当前仅开放邮箱登录；短信通道待企业资质+密钥配置后恢复
 
 const CHANNEL_CFG = {
-  sms: {
-    label: '手机号',
-    placeholder: '请输入 11 位手机号',
-    re: /^1[3-9]\d{9}$/,
-    err: '请输入正确的 11 位手机号。'
-  },
   email: {
     label: '邮箱',
-    placeholder: '请输入邮箱地址，如 name@example.com',
     re: /^[^\s@]+@[^\s@]+\.[^\s@]+$/,
     err: '请输入正确的邮箱地址。'
   }
@@ -679,18 +669,7 @@ async function openHistoryPanel() {
   } catch { /* 静默 */ }
 }
 
-// ----- 登录弹层（手机号 / 邮箱 + 验证码） -----
-function switchLoginChannel(channel) {
-  loginChannel = channel;
-  const cfg = CHANNEL_CFG[channel];
-  tabSms.classList.toggle('active', channel === 'sms');
-  tabEmail.classList.toggle('active', channel === 'email');
-  targetLabel.textContent = cfg.label;
-  targetInput.placeholder = cfg.placeholder;
-  targetInput.value = '';
-  hideFormError(loginError);
-}
-
+// ----- 登录弹层（邮箱验证码） -----
 function openLoginModal() {
   hideFormError(loginError);
   devHint.classList.add('hidden');
@@ -746,7 +725,7 @@ sendCodeBtn.addEventListener('click', async () => {
     // 开发模拟模式：验证码直接回显，便于本地联调
     if (data.mock && data.devCode) {
       codeInput.value = data.devCode;
-      devHint.textContent = `开发模式：验证码已自动填入（${data.devCode}）。配置短信/SMTP 密钥后自动切换真实下发。`;
+      devHint.textContent = `开发模式：验证码已自动填入（${data.devCode}）。配置 SMTP 后自动切换真实下发。`;
       devHint.classList.remove('hidden');
     }
   } catch {
@@ -791,8 +770,6 @@ loginForm.addEventListener('submit', async (e) => {
 
 loginClose.addEventListener('click', closeLoginModal);
 loginModal.addEventListener('click', (e) => { if (e.target === loginModal) closeLoginModal(); });
-tabSms.addEventListener('click', () => switchLoginChannel('sms'));
-tabEmail.addEventListener('click', () => switchLoginChannel('email'));
 
 // ----- 个人中心 -----
 function openProfile() {

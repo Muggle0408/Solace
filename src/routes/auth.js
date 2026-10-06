@@ -3,7 +3,7 @@ const crypto = require('crypto');
 const db = require('../services/db');
 const { createSession, destroySession, setSessionCookie, clearSessionCookie, parseCookies } = require('../middleware/auth');
 const { createRateLimiter } = require('../middleware/rateLimit');
-const { sendVerificationCode } = require('../services/smsClient');
+const { sendVerificationCode, isConfigured: smsConfigured } = require('../services/smsClient');
 const { sendCodeEmail } = require('../services/mailClient');
 
 const router = express.Router();
@@ -93,12 +93,20 @@ function normalizeTarget(channel, raw) {
   return channel === 'email' ? t.toLowerCase() : t;
 }
 
+// 短信通道需企业资质 + 腾讯云密钥；未配置时禁用（防止模拟模式回显验证码被滥用）
+function channelDisabled(channel) {
+  return channel === 'sms' && !smsConfigured();
+}
+
 // POST /api/auth/code/request —— 发送登录验证码（sms 走腾讯云/模拟，email 走 SMTP/模拟）
 router.post('/auth/code/request', authLimiter, async (req, res) => {
   const channel = String((req.body || {}).channel || 'sms');
   const cfg = CHANNELS[channel];
   if (!cfg) {
     return res.status(400).json({ error: 'INVALID_CHANNEL', message: '不支持的验证方式。' });
+  }
+  if (channelDisabled(channel)) {
+    return res.status(400).json({ error: 'CHANNEL_DISABLED', message: '手机号登录暂未开放，请使用邮箱登录。' });
   }
   const target = normalizeTarget(channel, (req.body || {}).target);
   if (!cfg.validate(target)) {
@@ -146,6 +154,9 @@ router.post('/auth/code/login', authLimiter, async (req, res) => {
   const cfg = CHANNELS[channel];
   if (!cfg) {
     return res.status(400).json({ error: 'INVALID_CHANNEL', message: '不支持的验证方式。' });
+  }
+  if (channelDisabled(channel)) {
+    return res.status(400).json({ error: 'CHANNEL_DISABLED', message: '手机号登录暂未开放，请使用邮箱登录。' });
   }
   const target = normalizeTarget(channel, (req.body || {}).target);
   const code = String((req.body || {}).code || '').trim();
