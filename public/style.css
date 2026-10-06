@@ -722,6 +722,46 @@ body.theme-light .form-submit:hover { background: #3d5680; }
   gap: 8px;
 }
 
+.account-top {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+/* 白天 / 夜晚 模式分段切换（常驻可见） */
+.theme-toggle {
+  display: flex;
+  background: var(--bg-card);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  padding: 3px;
+  box-shadow: 0 8px 24px var(--shadow);
+}
+
+.theme-opt {
+  border: none;
+  background: transparent;
+  color: var(--text-dim);
+  padding: 7px 16px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 300;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+  transition: all .3s ease;
+  white-space: nowrap;
+}
+
+.theme-opt:hover { color: var(--text); }
+
+.theme-opt.active {
+  background: var(--hover-fill);
+  color: var(--text);
+  box-shadow: inset 0 0 0 1px var(--border-strong);
+}
+
 .avatar-btn {
   width: 56px;
   height: 56px;
@@ -854,6 +894,9 @@ body.theme-light .form-submit:hover { background: #3d5680; }
 @media (max-width: 480px) {
   .icon-btn { width: 42px; height: 42px; font-size: 16px; }
   .header h1 { font-size: 20px; }
+  .theme-opt { padding: 6px 10px; font-size: 12px; }
+  .avatar-btn { width: 48px; height: 48px; font-size: 23px; }
+  .account-area { right: 12px; top: 12px; }
 }
 
 /* ---------- 动效降级 ---------- */

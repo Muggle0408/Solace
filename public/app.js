@@ -485,16 +485,28 @@ if (bgmListEl) {
 
 // ---------- 账号系统：右上角动物头像 + 下拉菜单（游客模式不受影响） ----------
 
-// 主题：默认暗夜森林；可切「低刺激浅色模式」，localStorage 记忆
+// 主题：默认暗夜森林；头像左侧分段按钮切换「白天/夜晚」，localStorage 记忆
+function setTheme(light) {
+  document.body.classList.toggle('theme-light', light);
+  localStorage.setItem('solace-theme', light ? 'light' : 'dark');
+  updateThemeToggle();
+}
+
+function updateThemeToggle() {
+  const light = document.body.classList.contains('theme-light');
+  document.querySelectorAll('.theme-opt').forEach((b) =>
+    b.classList.toggle('active', (b.dataset.theme === 'light') === light));
+}
+
 (function applySavedTheme() {
   if (localStorage.getItem('solace-theme') === 'light') document.body.classList.add('theme-light');
+  updateThemeToggle();
 })();
 
-function toggleTheme() {
-  const light = document.body.classList.toggle('theme-light');
-  localStorage.setItem('solace-theme', light ? 'light' : 'dark');
-  updateAuthUI(); // 重新渲染菜单以更新切换项文案
-}
+document.getElementById('themeToggle').addEventListener('click', (e) => {
+  const btn = e.target.closest('.theme-opt');
+  if (btn) setTheme(btn.dataset.theme === 'light');
+});
 
 // 引用语：每次加载随机一句（衬线、奶油白、居中）
 const QUOTES = [
@@ -575,12 +587,6 @@ function renderAccountMenu() {
     items.push({ icon: '👤', label: '账号登录', onClick: openLoginModal });
     items.push({ icon: '✨', label: '新对话', onClick: startNewConversationWithNote });
   }
-  const isLight = document.body.classList.contains('theme-light');
-  items.push({
-    icon: isLight ? '🌙' : '☀️',
-    label: isLight ? '暗夜森林模式' : '低刺激浅色模式',
-    onClick: toggleTheme
-  });
   accountMenu.innerHTML = '';
   items.forEach(({ icon, label, onClick }) => {
     const btn = document.createElement('button');
