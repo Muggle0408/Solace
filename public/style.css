@@ -774,6 +774,14 @@ body.theme-city .bg-photo::after {
 
 .avatar-btn:hover { border-color: var(--border-strong); transform: scale(1.05); }
 
+.avatar-btn img {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+  display: block;
+}
+
 .account-menu {
   min-width: 176px;
   background: var(--bg-card-strong);

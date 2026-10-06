@@ -524,7 +524,6 @@ document.getElementById('themeToggle').addEventListener('click', (e) => {
 
 // 引用语由 updateQuote() 按主题渲染（见上方主题区）
 
-const AVATAR_GUEST = '🐾';
 const ANIMAL_AVATARS = ['🦊', '🐰', '🐱', '🐻', '🐼', '🦉', '🐳', '🦌', '🐿️', '🐸'];
 
 const avatarBtn = document.getElementById('avatarBtn');
@@ -573,7 +572,11 @@ function updateAuthBanner() {
 }
 
 function updateAvatarBtn() {
-  avatarBtn.textContent = (currentUser && currentUser.avatar) || AVATAR_GUEST;
+  if (currentUser && currentUser.avatar) {
+    avatarBtn.textContent = currentUser.avatar;
+  } else {
+    avatarBtn.innerHTML = '<img src="avatar-guest.svg" alt="待登录">';
+  }
   const label = document.getElementById('avatarLabel');
   if (label) {
     const name = currentUser
