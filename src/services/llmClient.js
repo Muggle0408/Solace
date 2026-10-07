@@ -112,10 +112,12 @@ async function chatCompletionStream(messages, onDelta, options = {}) {
   );
 
   return new Promise((resolve, reject) => {
+    const { StringDecoder } = require('string_decoder');
+    const dec = new StringDecoder('utf8');
     let raw = '';
     let buffer = '';
     response.data.on('data', (chunk) => {
-      buffer += chunk.toString('utf8');
+      buffer += dec.write(chunk);
       const lines = buffer.split('\n');
       buffer = lines.pop(); // 半行留到下一分片
       for (const line of lines) {

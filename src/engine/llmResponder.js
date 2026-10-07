@@ -305,6 +305,7 @@ function makeStreamExtractor() {
   let raw = '';
   let scan = 0;          // 已确认非 text 值的扫描位
   let inText = false;    // 已进入 text 字符串值
+  let closed = false;    // text 值已完整结束，后续 delta 一律不再输出
   let i = 0;             // text 值内已消费位
   let inEscape = false;
 
@@ -313,9 +314,10 @@ function makeStreamExtractor() {
   return {
     feed(delta) {
       raw += delta;
+      if (closed) return '';
       let out = '';
       if (!inText) {
-        // 只在 "text" 键首次出现处进入（避免误匹配 text 前缀的其他键，用引号+冒号+引号定位）
+        // 只在 "text" 键首次出现处进入（用 引号+冒号+引号 定位，避免误匹配 "type":"text" 的值）
         const m = raw.slice(scan).match(/"text"\s*:\s*"/);
         if (!m) { scan = Math.max(0, raw.length - 12); return ''; }
         inText = true;
@@ -330,7 +332,7 @@ function makeStreamExtractor() {
           continue;
         }
         if (ch === '\\') { inEscape = true; i++; continue; }
-        if (ch === '"') { i = raw.length; break; } // 值结束
+        if (ch === '"') { closed = true; break; } // 值结束：永久关闭，后续 options/isCrisis 不再外泄
         out += ch;
         i++;
       }

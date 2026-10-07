@@ -502,18 +502,30 @@ describe('流式对话（SSE）', () => {
     assert.ok(res.text.includes('400-161-9995'));
   });
 
-  it('流式提取器：JSON 碎片增量抽出 text 字段', () => {
+  it('流式提取器：JSON 碎片增量抽出 text 字段，结束后续字段不泄漏', () => {
     const { makeStreamExtractor } = require('../src/engine/llmResponder');
     const ex = makeStreamExtractor();
     const chunks = [
       '{\"stage\":\"check_in\",\"type\":\"text\",\"text\":\"你',
       '好，',
       '世界',
-      '\",\"options\":[],\"isCrisis\":false}'
+      '\"',                                  // text 值结束的引号（单独到达）
+      ',\"options\":[\"a\",\"b\"]',     // 值结束之后还有多批 delta（曾因此把 JSON 尾巴泄进正文）
+      ',\"isCrisis\":false}'
     ];
     let text = '';
     for (const c of chunks) text += ex.feed(c);
     assert.strictEqual(text, '你好，世界');
-    assert.ok(ex.raw().includes('\"stage\"'));
+    assert.ok(ex.raw().includes('\"isCrisis\"'));
+  });
+
+  it('流式提取器：不误匹配 type 字段的 text 值', () => {
+    const { makeStreamExtractor } = require('../src/engine/llmResponder');
+    const ex = makeStreamExtractor();
+    let text = '';
+    for (const c of ['{\"stage\":\"check_in\",\"type\":\"text\",\"text\":\"正文\"}']) {
+      text += ex.feed(c);
+    }
+    assert.strictEqual(text, '正文');
   });
 });
