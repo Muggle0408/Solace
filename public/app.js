@@ -252,6 +252,7 @@ function flushStreamTts() {
 
 function flushChunk() {
   if (!chunkBuf) return;
+  console.log('[TTS-DBG] flushChunk 入队 len=' + chunkBuf.length + ' seq=' + speakSeq + ' text=' + chunkBuf.slice(0, 20));
   ttsChunkQueue.push({ text: chunkBuf, seq: speakSeq, fetching: null, blob: null });
   chunkBuf = '';
   chunkSents = 0;
@@ -269,6 +270,7 @@ function kickPipeline() {
 
 async function playNextChunk() {
   const item = ttsChunkQueue[0];
+  console.log('[TTS-DBG] playNextChunk item=' + (item ? item.text.slice(0, 12) : 'null') + ' playing=' + ttsPlaying + ' seq=' + (item && item.seq) + '/' + speakSeq);
   if (!item || ttsPlaying) return;
   ttsPlaying = true;
   try {
@@ -378,8 +380,10 @@ function finalizeStream(data, replaced, streamedText, bubble) {
   if (finalizeStream.done) return; // 防重复 finalize
   finalizeStream.done = true;
   const text = data.text || '';
+  console.log('[TTS-DBG] finalize ttsAuto=' + ttsAuto + ' sentCount=' + streamSentCount + ' chunkBuf=' + chunkBuf.length + ' queue=' + ttsChunkQueue.length);
   feedStreamTts(text); // 用最终全文再喂一次：补全增量漏掉的尾巴（sentCount 幂等）
   flushStreamTts();    // 把凑不满一段的尾巴送播报
+  console.log('[TTS-DBG] finalize 后 queue=' + ttsChunkQueue.length);
   if (!bubble) {
     // 规则兜底/无增量：走标准渲染
     addMessage(text, 'bot', data.stage, data.botMessageId || null);
