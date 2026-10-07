@@ -1,6 +1,6 @@
 const express = require('express');
 const db = require('../services/db');
-const { processMessage } = require('../engine/chatEngine');
+const { processMessage, processMessageStream } = require('../engine/chatEngine');
 
 const router = express.Router();
 
@@ -58,6 +58,54 @@ router.post('/chat', async (req, res) => {
       error: 'INTERNAL_ERROR',
       message: '抱歉，处理你的消息时出现了一些问题，请稍后再试。'
     });
+  }
+});
+
+
+// POST /api/chat/stream —— SSE 流式对话：delta 事件吐「text 字段」增量，done 事件给校验后的完整响应
+// 危机门/状态机校验/规则兜底全部复用 chatEngine，护栏位置不动；规则模式（无 LLM）只发 done
+router.post('/chat/stream', async (req, res) => {
+  const { message = '', history = [] } = req.body;
+  let convId = null;
+
+  if (req.user) {
+    convId = resolveConversation(req);
+    iMessage.run(convId, 'user', String(message).slice(0, 4000), null);
+    const { startRating, endRating } = req.body;
+    if (validRating(startRating)) uStartRating.run(startRating, convId);
+    if (validRating(endRating)) uEndRating.run(endRating, convId);
+  }
+
+  res.set({
+    'Content-Type': 'text/event-stream; charset=utf-8',
+    'Cache-Control': 'no-store, no-transform',
+    Connection: 'keep-alive',
+    'X-Accel-Buffering': 'no'
+  });
+  res.flushHeaders?.();
+  const send = (event, data) => {
+    if (!res.writableEnded) res.write(`event: ${event}
+data: ${JSON.stringify(data)}
+
+`);
+  };
+
+  try {
+    const { response, streamed } = await processMessageStream(String(message), history, {
+      onDelta: (d) => send('delta', { d })
+    });
+    if (req.user) {
+      const info = iMessage.run(convId, 'bot', String(response.text).slice(0, 4000), response.stage || null);
+      if (response.stage === 'end') uEnded.run(convId);
+      response.convId = convId;
+      response.botMessageId = info.lastInsertRowid;
+    }
+    send('done', { response, replaced: !streamed });
+  } catch (err) {
+    console.error('流式对话处理失败:', err);
+    send('error', { message: '处理失败' });
+  } finally {
+    if (!res.writableEnded) res.end();
   }
 });
 

@@ -61,27 +61,14 @@ function addMessage(text, sender, stage = null, dbId = null, opts = {}) {
   bubble.textContent = text;
   msgDiv.appendChild(bubble);
 
-  // AI 回复附带操作栏：朗读 + 满意度反馈
+  // AI 回复附带操作栏：朗读 + 满意度反馈（流式 finalize 也会调用）
   if (sender === 'bot') {
-    const actions = document.createElement('div');
-    actions.className = 'msg-actions';
-
-    const ttsBtn = document.createElement('button');
-    ttsBtn.className = 'tts-btn';
-    ttsBtn.textContent = '🔊 朗读';
-    ttsBtn.dataset.label = '🔊 朗读';
-    ttsBtn.title = '朗读这条回复';
-    ttsBtn.addEventListener('click', (e) => {
-      e.stopPropagation();
-      toggleSpeak(text, ttsBtn);
-    });
-    actions.appendChild(ttsBtn);
-
-    actions.appendChild(buildFeedbackBar(text, stage, dbId));
-    msgDiv.appendChild(actions);
-
+    attachBotActions(msgDiv, text, stage, dbId);
     // 自动播放：新回复到达即朗读（恢复历史除外；全局开关关闭时不播；点播放图标可停止/重播）
-    if (!opts.silent && ttsAuto) toggleSpeak(text, ttsBtn);
+    if (!opts.silent && ttsAuto) {
+      const ttsBtn = msgDiv.querySelector('.tts-btn');
+      if (ttsBtn) toggleSpeak(text, ttsBtn);
+    }
   }
 
   chatContainer.appendChild(msgDiv);
@@ -189,6 +176,186 @@ function showCrisisBanner() {
   crisisBanner.classList.remove('hidden');
 }
 
+// ---------- 流式回复：SSE 边收边显示 + 句子级 TTS 边合成边播 ----------
+// 首音延时 = LLM 首句生成时间 + 单句 TTS 合成时间（不再等全文 + 全文合成）
+
+// bot 操作栏（朗读 + 反馈），addMessage 与流式 finalize 共用
+function attachBotActions(msgDiv, text, stage, dbId) {
+  const actions = document.createElement('div');
+  actions.className = 'msg-actions';
+
+  const ttsBtn = document.createElement('button');
+  ttsBtn.className = 'tts-btn';
+  ttsBtn.textContent = '🔊 朗读';
+  ttsBtn.dataset.label = '🔊 朗读';
+  ttsBtn.title = '朗读这条回复';
+  ttsBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    toggleSpeak(text, ttsBtn);
+  });
+  actions.appendChild(ttsBtn);
+  actions.appendChild(buildFeedbackBar(text, stage, dbId));
+  msgDiv.appendChild(actions);
+}
+
+// 流式气泡：只有文字，done 后才挂操作栏
+function createStreamingBubble() {
+  const msgDiv = document.createElement('div');
+  msgDiv.className = 'message bot';
+  const bubbleEl = document.createElement('div');
+  bubbleEl.className = 'bubble';
+  msgDiv.appendChild(bubbleEl);
+  chatContainer.appendChild(msgDiv);
+  return {
+    msgDiv,
+    setText(t) {
+      bubbleEl.textContent = t;
+      chatContainer.scrollTop = chatContainer.scrollHeight;
+    }
+  };
+}
+
+// 句子队列：整句即送 TTS，播放期间预取后续句，逐句拼接
+let ttsSentenceQueue = [];
+let ttsQueueBusy = false;
+let streamSentCount = 0;
+
+function resetStreamTts() {
+  streamSentCount = 0;
+}
+
+// 从已流式文本中切出新完成的整句并入队（末位半句不入队）
+function feedStreamTts(fullText) {
+  if (!ttsAuto) return;
+  const parts = fullText.split(/(?<=[。！？!?；;\n])/);
+  const complete = parts.slice(0, -1).map((x) => x.trim()).filter(Boolean);
+  for (let i = streamSentCount; i < complete.length; i++) {
+    enqueueSentence(complete[i]);
+  }
+  streamSentCount = complete.length;
+}
+
+function enqueueSentence(sentence) {
+  ttsSentenceQueue.push({ sentence, seq: speakSeq });
+  pumpSentenceQueue();
+}
+
+async function pumpSentenceQueue() {
+  if (ttsQueueBusy) return;
+  const item = ttsSentenceQueue.shift();
+  if (!item) return;
+  if (item.seq !== speakSeq) { pumpSentenceQueue(); return; } // 已停止，丢弃余句
+  ttsQueueBusy = true;
+  try {
+    const blob = await fetchSentenceAudio(item.sentence, item.seq);
+    if (blob && item.seq === speakSeq) {
+      await playSentenceAudio(blob, item.seq);
+    }
+  } catch { /* 单句失败直接跳到下一句 */ }
+  ttsQueueBusy = false;
+  if (item.seq === speakSeq) pumpSentenceQueue();
+}
+
+function fetchSentenceAudio(sentence) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 12000);
+  return fetch('/api/tts', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ text: sentence }),
+    signal: controller.signal
+  })
+    .then((r) => (r.ok ? r.blob() : null))
+    .catch(() => null)
+    .finally(() => clearTimeout(timer));
+}
+
+function playSentenceAudio(blob) {
+  return new Promise((resolve) => {
+    const url = URL.createObjectURL(blob);
+    const audio = new Audio(url);
+    const done = () => {
+      URL.revokeObjectURL(url);
+      if (currentAudio === audio) currentAudio = null;
+      if (currentAudioUrl === url) currentAudioUrl = null;
+      resolve();
+    };
+    audio.onended = done;
+    audio.onerror = done;
+    currentAudio = audio;
+    currentAudioUrl = url;
+    audio.play().catch(done);
+  });
+}
+
+async function streamAssistantReply(userText, payload) {
+  resetStreamTts();
+  const headers = { 'Content-Type': 'application/json' };
+  if (currentConvId) headers['X-Conv-Id'] = currentConvId;
+  const res = await fetch('/api/chat/stream', { method: 'POST', headers, body: JSON.stringify(payload) });
+  if (!res.ok || !res.body) throw new Error('stream http ' + res.status);
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buf = '';
+  let fullText = '';
+  let bubble = null;
+
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buf += decoder.decode(value, { stream: true });
+    const packets = buf.split('\n\n');
+    buf = packets.pop();
+    for (const pkt of packets) {
+      if (!pkt.trim()) continue;
+      const lines = pkt.split('\n');
+      const evLine = lines.find((l) => l.startsWith('event:'));
+      const dataLine = lines.find((l) => l.startsWith('data:'));
+      if (!dataLine) continue;
+      let data = null;
+      try { data = JSON.parse(dataLine.slice(5).trim()); } catch { continue; }
+      const ev = evLine ? evLine.slice(6).trim() : 'message';
+      if (ev === 'delta') {
+        fullText += data.d;
+        if (!bubble) bubble = createStreamingBubble();
+        bubble.setText(fullText);
+        feedStreamTts(fullText);
+      } else if (ev === 'done') {
+        finalizeStream(data.response, data.replaced, fullText, bubble);
+      } else if (ev === 'error') {
+        throw new Error(data.message || 'stream error');
+      }
+    }
+  }
+}
+
+function finalizeStream(data, replaced, streamedText, bubble) {
+  const text = data.text || '';
+  if (!bubble) {
+    // 规则兜底/无增量：走标准渲染
+    addMessage(text, 'bot', data.stage, data.botMessageId || null);
+    afterBotMessage(data);
+    return;
+  }
+  if (replaced && text !== streamedText) bubble.setText(text);
+  const record = { role: 'bot', content: text, time: new Date().toISOString() };
+  if (data.stage) record.stage = data.stage;
+  if (data.botMessageId) record.dbId = data.botMessageId;
+  history.push(record);
+  sessionRecord.messages.push({ sender: 'bot', text, time: new Date().toISOString() });
+  attachBotActions(bubble.msgDiv, text, data.stage, data.botMessageId || null);
+  chatContainer.scrollTop = chatContainer.scrollHeight;
+  afterBotMessage(data);
+}
+
+function afterBotMessage(data) {
+  if (data.type === 'crisis') showCrisisBanner();
+  if (data.convId) currentConvId = data.convId;
+  renderOptions(data.options);
+  if (data.stage === 'end') saveSession();
+}
+
 async function handleUserMessage(text) {
   if (!text.trim() || isProcessing) return;
   isProcessing = true;
@@ -215,24 +382,7 @@ async function handleUserMessage(text) {
     if (startRating !== null) payload.startRating = startRating;
     if (endRating !== null) payload.endRating = endRating;
 
-    const res = await fetch('/api/chat', {
-      method: 'POST',
-      headers,
-      body: JSON.stringify(payload)
-    });
-    const data = await res.json();
-
-    if (data.type === 'crisis') {
-      showCrisisBanner();
-    }
-
-    if (data.convId) currentConvId = data.convId;
-    addMessage(data.text, 'bot', data.stage, data.botMessageId || null);
-    renderOptions(data.options);
-
-    if (data.stage === 'end') {
-      saveSession();
-    }
+    await streamAssistantReply(text, payload);
   } catch (err) {
     addMessage('抱歉，发生了一些错误，请稍后再试。', 'bot');
     console.error(err);
@@ -296,6 +446,7 @@ let speakSeq = 0;
 
 function stopSpeaking() {
   speakSeq++; // 使进行中的异步播放失效
+  ttsSentenceQueue.length = 0; // 清空流式句子队列
   if ('speechSynthesis' in window) speechSynthesis.cancel();
   if (currentAudio) { currentAudio.pause(); currentAudio = null; }
   if (currentAudioUrl) { URL.revokeObjectURL(currentAudioUrl); currentAudioUrl = null; }

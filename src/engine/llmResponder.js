@@ -1,4 +1,4 @@
-const { chatCompletion } = require('../services/llmClient');
+const { chatCompletion, chatCompletionStream } = require('../services/llmClient');
 const { isValidTransition } = require('../config/stages');
 const { getFewShotExamples } = require('../config/fewShots');
 const { retrieveKnowledge } = require('../services/kbRetriever');
@@ -299,6 +299,47 @@ function validateResponse(response, currentStage, message = '') {
   return response;
 }
 
+// 增量提取器：从模型流式输出的 JSON 片段中实时抽取 "text" 字段的值
+// 返回 feed(delta) → 本批新增的用户可见文本；raw() → 完整原始输出（用于最终解析校验）
+function makeStreamExtractor() {
+  let raw = '';
+  let scan = 0;          // 已确认非 text 值的扫描位
+  let inText = false;    // 已进入 text 字符串值
+  let i = 0;             // text 值内已消费位
+  let inEscape = false;
+
+  const UNESCAPE = { n: '\n', t: '\t', r: '\r', '"': '"', '\\': '\\', '/': '/' };
+
+  return {
+    feed(delta) {
+      raw += delta;
+      let out = '';
+      if (!inText) {
+        // 只在 "text" 键首次出现处进入（避免误匹配 text 前缀的其他键，用引号+冒号+引号定位）
+        const m = raw.slice(scan).match(/"text"\s*:\s*"/);
+        if (!m) { scan = Math.max(0, raw.length - 12); return ''; }
+        inText = true;
+        i = scan + m.index + m[0].length;
+      }
+      while (i < raw.length) {
+        const ch = raw[i];
+        if (inEscape) {
+          out += UNESCAPE[ch] ?? ch;
+          inEscape = false;
+          i++;
+          continue;
+        }
+        if (ch === '\\') { inEscape = true; i++; continue; }
+        if (ch === '"') { i = raw.length; break; } // 值结束
+        out += ch;
+        i++;
+      }
+      return out;
+    },
+    raw: () => raw
+  };
+}
+
 async function generateResponse(message, currentStage, history = []) {
   // 避免空用户消息导致 API 报错
   const safeMessage = message && message.trim() ? message.trim() : '（用户未输入文字）';
@@ -325,4 +366,32 @@ async function generateResponse(message, currentStage, history = []) {
   return validateResponse(response, currentStage, safeMessage);
 }
 
-module.exports = { generateResponse, buildPrompt };
+// 流式生成：边生成边通过 onDelta 吐出「text 字段」的增量；
+// 最终仍走完整 parseJSON + 校验，护栏与同步版完全一致
+async function generateResponseStream(message, currentStage, history = [], { onDelta } = {}) {
+  const safeMessage = message && message.trim() ? message.trim() : '（用户未输入文字）';
+
+  let kbBlocks = [];
+  if (currentStage !== 'crisis') {
+    try {
+      kbBlocks = await retrieveKnowledge(safeMessage, currentStage);
+    } catch (err) {
+      console.warn('[RAG] 检索失败，降级为无知识注入:', err.message);
+    }
+  }
+
+  const prompt = buildPrompt(safeMessage, currentStage, history, kbBlocks);
+  const extractor = makeStreamExtractor();
+  await chatCompletionStream(
+    [{ role: 'system', content: prompt }, { role: 'user', content: safeMessage }],
+    (delta) => {
+      const t = extractor.feed(delta);
+      if (t) onDelta(t);
+    }
+  );
+
+  const response = parseJSON(extractor.raw());
+  return validateResponse(response, currentStage, safeMessage);
+}
+
+module.exports = { generateResponse, generateResponseStream, buildPrompt, makeStreamExtractor };

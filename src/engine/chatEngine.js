@@ -34,4 +34,26 @@ async function processMessage(message, history = []) {
   return ruleResponder.generateResponse(message, currentStage);
 }
 
-module.exports = { processMessage };
+// 流式流程：危机门与状态机校验位置不变；LLM 失败/非法跳转回退规则引擎
+// 返回 { response, streamed }：streamed=false 表示回复来自规则兜底（前端需替换已显示的流式文字）
+async function processMessageStream(message, history = [], { onDelta } = {}) {
+  if (detectCrisis(message)) {
+    return { response: ruleResponder.generateCrisisResponse(), streamed: false };
+  }
+  const currentStage = getCurrentStage(history);
+  if (USE_LLM) {
+    try {
+      const response = await llmResponder.generateResponseStream(message, currentStage, history, { onDelta });
+      if (isValidTransition(currentStage, response.stage, message)) {
+        console.log(`[LLM流式] ${currentStage} -> ${response.stage} | 用户: ${message.slice(0, 30)}`);
+        return { response, streamed: true };
+      }
+      console.warn(`[LLM流式->规则] 非法阶段跳转: ${currentStage} -> ${response.stage}`);
+    } catch (err) {
+      console.warn('[LLM流式->规则] 流式生成失败，回退规则引擎:', err.message);
+    }
+  }
+  return { response: ruleResponder.generateResponse(message, currentStage), streamed: false };
+}
+
+module.exports = { processMessage, processMessageStream };

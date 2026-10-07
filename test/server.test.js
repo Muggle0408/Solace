@@ -481,3 +481,39 @@ describe('RAG 知识库', () => {
     assert.ok(!withoutKb.includes('【可参考的专业依据】'));
   });
 });
+
+describe('流式对话（SSE）', () => {
+  it('规则模式：直接 done，内容为规则响应', async () => {
+    const res = await request(app).post('/api/chat/stream')
+      .send({ message: '焦虑', history: [] })
+      .expect(200);
+    assert.ok(res.headers['content-type'].includes('text/event-stream'));
+    assert.ok(res.text.includes('event: done'));
+    assert.ok(res.text.includes('"stage":"check_in"'));
+    assert.ok(!res.text.includes('event: delta'));
+  });
+
+  it('危机输入：走危机规则响应，无 delta', async () => {
+    const res = await request(app).post('/api/chat/stream')
+      .send({ message: '我想自杀', history: [] })
+      .expect(200);
+    assert.ok(!res.text.includes('event: delta'));
+    assert.ok(res.text.includes('"isCrisis":true'));
+    assert.ok(res.text.includes('400-161-9995'));
+  });
+
+  it('流式提取器：JSON 碎片增量抽出 text 字段', () => {
+    const { makeStreamExtractor } = require('../src/engine/llmResponder');
+    const ex = makeStreamExtractor();
+    const chunks = [
+      '{\"stage\":\"check_in\",\"type\":\"text\",\"text\":\"你',
+      '好，',
+      '世界',
+      '\",\"options\":[],\"isCrisis\":false}'
+    ];
+    let text = '';
+    for (const c of chunks) text += ex.feed(c);
+    assert.strictEqual(text, '你好，世界');
+    assert.ok(ex.raw().includes('\"stage\"'));
+  });
+});
