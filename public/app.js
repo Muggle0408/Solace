@@ -215,54 +215,85 @@ function createStreamingBubble() {
   };
 }
 
-// 句子队列：整句即送 TTS，播放期间预取后续句，逐句拼接
-let ttsSentenceQueue = [];
-let ttsQueueBusy = false;
-let streamSentCount = 0;
+// 播报流水线：句子合并成 ~60 字段落；播放当前段时，后面 2 段已在后台合成（无缝衔接）
+let ttsChunkQueue = [];       // 待播队列：{ text, seq, fetching, blob }
+let ttsPlaying = false;
+let streamSentCount = 0;      // 已消费到第几句
+let chunkBuf = '';            // 凑段缓冲区
+let chunkSents = 0;           // 当前段已含几句
+const CHUNK_MAX_CHARS = 60;
+const CHUNK_MAX_SENTS = 3;
+const PRELOAD_AHEAD = 2;      // 除当前播放外，提前合成几段
 
 function resetStreamTts() {
   streamSentCount = 0;
+  chunkBuf = '';
+  chunkSents = 0;
 }
 
-// 从已流式文本中切出新完成的整句并入队（末位半句不入队）
+// 从已流式文本中切出新完成的整句，凑段入队（末位半句留到下批）
 function feedStreamTts(fullText) {
   if (!ttsAuto) return;
   const parts = fullText.split(/(?<=[。！？!?；;\n])/);
   const complete = parts.slice(0, -1).map((x) => x.trim()).filter(Boolean);
   for (let i = streamSentCount; i < complete.length; i++) {
-    enqueueSentence(complete[i]);
+    chunkBuf += complete[i];
+    chunkSents++;
+    if (chunkBuf.length >= CHUNK_MAX_CHARS || chunkSents >= CHUNK_MAX_SENTS) flushChunk();
   }
   streamSentCount = complete.length;
 }
 
-function enqueueSentence(sentence) {
-  ttsSentenceQueue.push({ sentence, seq: speakSeq });
-  pumpSentenceQueue();
+// 流结束时把尾巴 flush 进队列，保证最后一段也播报
+function flushStreamTts() {
+  flushChunk();
 }
 
-async function pumpSentenceQueue() {
-  if (ttsQueueBusy) return;
-  const item = ttsSentenceQueue.shift();
-  if (!item) return;
-  if (item.seq !== speakSeq) { pumpSentenceQueue(); return; } // 已停止，丢弃余句
-  ttsQueueBusy = true;
+function flushChunk() {
+  if (!chunkBuf) return;
+  ttsChunkQueue.push({ text: chunkBuf, seq: speakSeq, fetching: null, blob: null });
+  chunkBuf = '';
+  chunkSents = 0;
+  kickPipeline();
+}
+
+// 维持「前方 PRELOAD_AHEAD 段已发起合成」的不变量，并驱动播放
+function kickPipeline() {
+  const pending = ttsChunkQueue.filter((it) => !it.blob && !it.fetching).slice(0, PRELOAD_AHEAD);
+  for (const it of pending) {
+    it.fetching = fetchChunkAudio(it.text).then((b) => { it.blob = b; });
+  }
+  if (!ttsPlaying) playNextChunk();
+}
+
+async function playNextChunk() {
+  const item = ttsChunkQueue[0];
+  if (!item || ttsPlaying) return;
+  ttsPlaying = true;
   try {
-    const blob = await fetchSentenceAudio(item.sentence, item.seq);
-    if (blob && item.seq === speakSeq) {
-      await playSentenceAudio(blob, item.seq);
+    if (item.seq !== speakSeq) { // 已停止：清空并结束
+      ttsChunkQueue.length = 0;
+      return;
     }
-  } catch { /* 单句失败直接跳到下一句 */ }
-  ttsQueueBusy = false;
-  if (item.seq === speakSeq) pumpSentenceQueue();
+    if (!item.fetching) item.fetching = fetchChunkAudio(item.text).then((b) => { item.blob = b; });
+    await item.fetching;
+    ttsChunkQueue.shift();
+    kickPipeline(); // 播放期间继续预取后续段
+    if (item.blob && item.seq === speakSeq) {
+      await playChunkAudio(item.blob, item.seq);
+    }
+  } catch { /* 单段失败跳到下一段 */ }
+  ttsPlaying = false;
+  if (ttsChunkQueue.length) playNextChunk();
 }
 
-function fetchSentenceAudio(sentence) {
+function fetchChunkAudio(text) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 12000);
   return fetch('/api/tts', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ text: sentence }),
+    body: JSON.stringify({ text }),
     signal: controller.signal
   })
     .then((r) => (r.ok ? r.blob() : null))
@@ -270,7 +301,7 @@ function fetchSentenceAudio(sentence) {
     .finally(() => clearTimeout(timer));
 }
 
-function playSentenceAudio(blob) {
+function playChunkAudio(blob, seq) {
   return new Promise((resolve) => {
     const url = URL.createObjectURL(blob);
     const audio = new Audio(url);
@@ -284,6 +315,7 @@ function playSentenceAudio(blob) {
     audio.onerror = done;
     currentAudio = audio;
     currentAudioUrl = url;
+    if (seq !== speakSeq) { done(); return; } // 已被停止
     audio.play().catch(done);
   });
 }
@@ -331,6 +363,7 @@ async function streamAssistantReply(userText, payload) {
 }
 
 function finalizeStream(data, replaced, streamedText, bubble) {
+  flushStreamTts(); // 把最后不足一段的尾巴送播报
   const text = data.text || '';
   if (!bubble) {
     // 规则兜底/无增量：走标准渲染
@@ -446,7 +479,7 @@ let speakSeq = 0;
 
 function stopSpeaking() {
   speakSeq++; // 使进行中的异步播放失效
-  ttsSentenceQueue.length = 0; // 清空流式句子队列
+  ttsChunkQueue.length = 0; // 清空流式播报队列
   if ('speechSynthesis' in window) speechSynthesis.cancel();
   if (currentAudio) { currentAudio.pause(); currentAudio = null; }
   if (currentAudioUrl) { URL.revokeObjectURL(currentAudioUrl); currentAudioUrl = null; }
