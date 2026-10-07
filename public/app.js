@@ -226,6 +226,7 @@ const CHUNK_MAX_SENTS = 3;
 const PRELOAD_AHEAD = 2;      // 除当前播放外，提前合成几段
 
 function resetStreamTts() {
+  finalizeStream.done = false;
   streamSentCount = 0;
   chunkBuf = '';
   chunkSents = 0;
@@ -332,6 +333,29 @@ async function streamAssistantReply(userText, payload) {
   let buf = '';
   let fullText = '';
   let bubble = null;
+  let finalized = false;
+
+  const handlePacket = (pkt) => {
+    if (!pkt || !pkt.trim()) return;
+    const ls = pkt.split('\n');
+    const evLine = ls.find((l) => l.startsWith('event:'));
+    const dataLine = ls.find((l) => l.startsWith('data:'));
+    if (!dataLine) return;
+    let data = null;
+    try { data = JSON.parse(dataLine.slice(5).trim()); } catch { return; }
+    const ev = evLine ? evLine.slice(6).trim() : 'message';
+    if (ev === 'delta') {
+      fullText += data.d;
+      if (!bubble) bubble = createStreamingBubble();
+      bubble.setText(fullText);
+      feedStreamTts(fullText);
+    } else if (ev === 'done') {
+      finalized = true;
+      finalizeStream(data.response, data.replaced, fullText, bubble);
+    } else if (ev === 'error') {
+      throw new Error(data.message || 'stream error');
+    }
+  };
 
   for (;;) {
     const { done, value } = await reader.read();
@@ -340,31 +364,22 @@ async function streamAssistantReply(userText, payload) {
     const packets = buf.split('\n\n');
     buf = packets.pop();
     for (const pkt of packets) {
-      if (!pkt.trim()) continue;
-      const lines = pkt.split('\n');
-      const evLine = lines.find((l) => l.startsWith('event:'));
-      const dataLine = lines.find((l) => l.startsWith('data:'));
-      if (!dataLine) continue;
-      let data = null;
-      try { data = JSON.parse(dataLine.slice(5).trim()); } catch { continue; }
-      const ev = evLine ? evLine.slice(6).trim() : 'message';
-      if (ev === 'delta') {
-        fullText += data.d;
-        if (!bubble) bubble = createStreamingBubble();
-        bubble.setText(fullText);
-        feedStreamTts(fullText);
-      } else if (ev === 'done') {
-        finalizeStream(data.response, data.replaced, fullText, bubble);
-      } else if (ev === 'error') {
-        throw new Error(data.message || 'stream error');
-      }
+      try { handlePacket(pkt); } catch (err) { console.warn('[stream] 包处理失败:', err.message); }
     }
   }
+  // 兜底：读流结束仍未 finalize（末包边界等情况），把残余缓冲再解析一遍
+  if (!finalized) {
+    for (const pkt of buf.split('\n\n')) handlePacket(pkt);
+  }
+  if (!finalized) throw new Error('stream ended without done');
 }
 
 function finalizeStream(data, replaced, streamedText, bubble) {
-  flushStreamTts(); // 把最后不足一段的尾巴送播报
+  if (finalizeStream.done) return; // 防重复 finalize
+  finalizeStream.done = true;
   const text = data.text || '';
+  feedStreamTts(text); // 用最终全文再喂一次：补全增量漏掉的尾巴（sentCount 幂等）
+  flushStreamTts();    // 把凑不满一段的尾巴送播报
   if (!bubble) {
     // 规则兜底/无增量：走标准渲染
     addMessage(text, 'bot', data.stage, data.botMessageId || null);
