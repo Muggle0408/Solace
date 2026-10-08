@@ -221,7 +221,7 @@ let ttsPlaying = false;
 let streamSentCount = 0;      // 已消费到第几句
 let chunkBuf = '';            // 凑段缓冲区
 let chunkSents = 0;           // 当前段已含几句
-let enqueuedText = '';        // 已入队文本累计（finalize 覆盖核对用）
+let enqueuedText = '';        // (已废弃) 旧覆盖核对所用，现保留仅占位
 const CHUNK_MAX_CHARS = 60;
 const CHUNK_MAX_SENTS = 3;
 const PRELOAD_AHEAD = 2;      // 除当前播放外，提前合成几段
@@ -234,17 +234,25 @@ function resetStreamTts() {
   enqueuedText = '';
 }
 
+//  invisible 字符清洗（模型输出句尾可能带零宽空格，会让切句器误判"最后一句不完整"）
+function cleanTtsText(t) {
+  return String(t).replace(/[\u200B\u200C\u200D\uFEFF]/g, '');
+}
+
 // 从已流式文本中切出新完成的整句，凑段入队（末位半句留到下批）
+// 计数用 raw 段落索引（含 \n 碎片位），与 finalize 的覆盖计算同源，避免索引错位
 function feedStreamTts(fullText) {
   if (!ttsAuto) return;
-  const parts = fullText.split(/(?<=[。！？!?；;\n])/);
-  const complete = parts.slice(0, -1).map((x) => x.trim()).filter(Boolean);
-  for (let i = streamSentCount; i < complete.length; i++) {
-    chunkBuf += complete[i];
+  const parts = cleanTtsText(fullText).split(/(?<=[。！？!?；;\n])/);
+  const usable = parts.slice(0, -1); // 末段（可能未完成）本轮不消费
+  for (let i = streamSentCount; i < usable.length; i++) {
+    streamSentCount = i + 1;
+    const seg = usable[i].trim();
+    if (!seg) continue; // \n 碎片等空段：只推进计数
+    chunkBuf += seg;
     chunkSents++;
     if (chunkBuf.length >= CHUNK_MAX_CHARS || chunkSents >= CHUNK_MAX_SENTS) flushChunk();
   }
-  streamSentCount = complete.length;
 }
 
 // 流结束时把尾巴 flush 进队列，保证最后一段也播报
@@ -387,16 +395,15 @@ function finalizeStream(data, replaced, streamedText, bubble) {
   console.log('[TTS-DBG] finalize text.len=' + text.length + ' streamed.len=' + streamedText.length + ' 末8字=' + JSON.stringify(text.slice(-8)) + ' sentCount=' + streamSentCount + ' chunkBuf=' + chunkBuf.length + ' queue=' + ttsChunkQueue.length + ' enqueued=' + enqueuedText.length);
   feedStreamTts(text); // 用最终全文再喂一次：补全增量漏掉的尾巴（sentCount 幂等）
   flushStreamTts();    // 把凑不满一段的尾巴送播报
-  // 覆盖核对（与增量过程解耦）：已入队文本在最终全文里定位，未覆盖的尾部强制入队，保证末句必播
-  const idx = enqueuedText ? text.indexOf(enqueuedText) : 0;
-  if (idx !== -1) {
-    const tail = text.slice(idx + enqueuedText.length).trim();
-    if (tail) {
-      console.log('[TTS-DBG] 覆盖核对补尾巴 len=' + tail.length + ' tail=' + tail.slice(0, 20));
-      ttsChunkQueue.push({ text: tail, seq: speakSeq, fetching: null, blob: null });
-      enqueuedText += tail;
-      kickPipeline();
-    }
+  // 覆盖核对：与 feedStreamTts 同源的 raw 段落索引计算未覆盖尾部，强制入队（保证末句必播）
+  const cleaned = cleanTtsText(text);
+  const rawParts = cleaned.split(/(?<=[。！？!?；;\n])/);
+  const covered = rawParts.slice(0, streamSentCount).join('');
+  const tail = cleaned.slice(covered.length).trim();
+  if (tail) {
+    console.log('[TTS-DBG] 覆盖核对补尾巴 len=' + tail.length + ' tail=' + tail.slice(0, 20));
+    ttsChunkQueue.push({ text: tail, seq: speakSeq, fetching: null, blob: null });
+    kickPipeline();
   }
   console.log('[TTS-DBG] finalize 后 queue=' + ttsChunkQueue.length);
   if (!bubble) {
