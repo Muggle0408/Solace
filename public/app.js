@@ -262,7 +262,6 @@ function flushStreamTts() {
 
 function flushChunk() {
   if (!chunkBuf) return;
-  console.log('[TTS-DBG] flushChunk 入队 len=' + chunkBuf.length + ' seq=' + speakSeq + ' text=' + chunkBuf.slice(0, 20));
   ttsChunkQueue.push({ text: chunkBuf, seq: speakSeq, fetching: null, blob: null });
   enqueuedText += chunkBuf;
   chunkBuf = '';
@@ -281,7 +280,6 @@ function kickPipeline() {
 
 async function playNextChunk() {
   const item = ttsChunkQueue[0];
-  console.log('[TTS-DBG] playNextChunk item=' + (item ? item.text.slice(0, 12) : 'null') + ' playing=' + ttsPlaying + ' seq=' + (item && item.seq) + '/' + speakSeq);
   if (!item || ttsPlaying) return;
   ttsPlaying = true;
   try {
@@ -362,7 +360,6 @@ async function streamAssistantReply(userText, payload) {
       if (!bubble) bubble = createStreamingBubble();
       bubble.setText(fullText);
       feedStreamTts(fullText);
-      console.log('[TTS-DBG] delta 末8字=' + JSON.stringify(fullText.slice(-8)) + ' sentCount=' + streamSentCount + ' chunkBuf=' + chunkBuf.length);
     } else if (ev === 'done') {
       finalized = true;
       finalizeStream(data.response, data.replaced, fullText, bubble);
@@ -392,7 +389,6 @@ function finalizeStream(data, replaced, streamedText, bubble) {
   if (finalizeStream.done) return; // 防重复 finalize
   finalizeStream.done = true;
   const text = data.text || '';
-  console.log('[TTS-DBG] finalize text.len=' + text.length + ' streamed.len=' + streamedText.length + ' 末8字=' + JSON.stringify(text.slice(-8)) + ' sentCount=' + streamSentCount + ' chunkBuf=' + chunkBuf.length + ' queue=' + ttsChunkQueue.length + ' enqueued=' + enqueuedText.length);
   feedStreamTts(text); // 用最终全文再喂一次：补全增量漏掉的尾巴（sentCount 幂等）
   flushStreamTts();    // 把凑不满一段的尾巴送播报
   // 覆盖核对：与 feedStreamTts 同源的 raw 段落索引计算未覆盖尾部，强制入队（保证末句必播）
@@ -401,11 +397,9 @@ function finalizeStream(data, replaced, streamedText, bubble) {
   const covered = rawParts.slice(0, streamSentCount).join('');
   const tail = cleaned.slice(covered.length).trim();
   if (tail) {
-    console.log('[TTS-DBG] 覆盖核对补尾巴 len=' + tail.length + ' tail=' + tail.slice(0, 20));
     ttsChunkQueue.push({ text: tail, seq: speakSeq, fetching: null, blob: null });
     kickPipeline();
   }
-  console.log('[TTS-DBG] finalize 后 queue=' + ttsChunkQueue.length);
   if (!bubble) {
     // 规则兜底/无增量：走标准渲染
     addMessage(text, 'bot', data.stage, data.botMessageId || null);
