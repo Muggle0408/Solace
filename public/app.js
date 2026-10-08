@@ -302,9 +302,11 @@ async function playNextChunk() {
 function fetchChunkAudio(text) {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 12000);
+  const ttsHeaders = { 'Content-Type': 'application/json' };
+  if (currentConvId) ttsHeaders['X-Conv-Id'] = currentConvId;
   return fetch('/api/tts', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: ttsHeaders,
     body: JSON.stringify({ text }),
     signal: controller.signal
   })
@@ -540,9 +542,11 @@ async function toggleSpeak(text, btn) {
   const ttsTimeout = setTimeout(() => controller.abort(), 15000);
 
   try {
+    const ttsHeaders2 = { 'Content-Type': 'application/json' };
+    if (currentConvId) ttsHeaders2['X-Conv-Id'] = currentConvId;
     const res = await fetch('/api/tts', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: ttsHeaders2,
       body: JSON.stringify({ text }),
       signal: controller.signal
     });

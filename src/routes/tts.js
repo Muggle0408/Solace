@@ -1,5 +1,6 @@
 const express = require('express');
 const { synthesize, isConfigured } = require('../services/ttsClient');
+const { logTtsUse } = require('../services/ttsUsageLog');
 
 const router = express.Router();
 
@@ -19,6 +20,8 @@ router.post('/tts', async (req, res) => {
     res.set('Content-Type', 'audio/mpeg');
     res.set('Cache-Control', 'no-store');
     res.send(audio);
+    const convId = Number(req.headers['x-conv-id']);
+    logTtsUse({ convId: Number.isInteger(convId) && convId > 0 ? convId : null, userId: req.user ? req.user.id : null, chars: text.length });
     console.log(`[TTS] 合成成功 | ${Date.now() - startAt}ms | ${audio.length}字节`);
   } catch (err) {
     console.error('[TTS] 合成失败:', err.message);

@@ -8,6 +8,7 @@ const USE_LLM = process.env.USE_LLM === 'true';
 async function processMessage(message, history = []) {
   // 1. 危机识别优先
   if (detectCrisis(message)) {
+    console.log('[危机门] 命中危机规则，走热线转介 | 用户:', String(message).slice(0, 30));
     return ruleResponder.generateCrisisResponse();
   }
 

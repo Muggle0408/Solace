@@ -422,6 +422,36 @@ describe('对话落库与历史恢复', () => {
   });
 });
 
+describe('V1 周报指标', () => {
+  it('周窗口与指标计算：会话/完聊/反馈口径正确', () => {
+    const { weekBounds, computeMetrics, ratio } = require('../src/services/weeklyMetrics');
+    const wb = weekBounds(new Date('2026-10-07T12:00:00'));
+    assert.ok(wb.from.startsWith('2026-10-05')); // 周一
+    assert.ok(wb.to.startsWith('2026-10-12'));
+
+    // 造数据：一次完聊(含 closing 消息+双评分改善≥2)、一次未完聊
+    const db = require('../src/services/db');
+    const c1 = db.prepare(`INSERT INTO conversations (user_id, start_rating, end_rating, ended_at) VALUES (NULL, 6, 3, datetime('now'))`).run().lastInsertRowid;
+    db.prepare(`INSERT INTO messages (conv_id, role, content, stage) VALUES (${c1}, 'bot', 'a', 'closing'), (${c1}, 'bot', 'b', NULL)`).run();
+    db.prepare(`UPDATE messages SET vote='down', vote_reason='太敷衍' WHERE conv_id=${c1} AND stage IS NULL`).run();
+    const c2 = db.prepare('INSERT INTO conversations (user_id) VALUES (NULL)').run().lastInsertRowid;
+    db.prepare(`INSERT INTO messages (conv_id, role, content) VALUES (${c2}, 'bot', 'x')`).run();
+
+    const now = new Date().toISOString().replace('T', ' ').slice(0, 19);
+    const future = new Date(Date.now() + 86400 * 1000).toISOString().replace('T', ' ').slice(0, 19);
+    const m = computeMetrics('2000-01-01 00:00:00', future);
+    assert.ok(m.total >= 2, `总会话 ${m.total}`);
+    assert.strictEqual(m.effectiveRate !== null, true);
+    assert.strictEqual(m.completionRate !== null, true);
+    assert.strictEqual(m.feedbackRate !== null, true);
+    assert.strictEqual(m.downRate !== null, true);
+    assert.strictEqual(ratio(1, 4), 25);
+    assert.strictEqual(ratio(1, 0), null);
+    assert.ok(/^[0-9]+\/[0-9]+$/.test(m.downDetail), 'downDetail=' + m.downDetail);
+    assert.ok(now <= future);
+  });
+});
+
 describe('RAG 知识库', () => {
   const fs = require('fs');
   const os = require('os');
