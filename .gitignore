@@ -51,3 +51,6 @@ data/
 # ===== 所有 .md 文档本地留存（不上 GitHub）=====
 *.md
 !knowledge/*.md
+
+# 每日数据库备份产物
+backup/
