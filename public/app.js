@@ -589,32 +589,59 @@ async function toggleSpeak(text, btn) {
   speak(text, btn);
 }
 
-// ASR：点击开始录音，转写结果填入输入框，用户确认后发送
+// ASR：点击开始录音——持续聆听，停顿 5 秒自动结束，也可点 ■ 手动结束
+const ASR_SILENCE_TIMEOUT = 5000; // 停顿自动结束阈值（毫秒）
+const ASR_MAX_RESTARTS = 5;       // 浏览器意外中断时的自动重连上限
+let asrFinalTranscript = '';
+let asrLastSpeechAt = 0;
+let asrWatchdog = null;
+let asrManualStop = false;
+let asrRestarts = 0;
+
 function setRecordingState(on) {
   recording = on;
   micBtn.classList.toggle('recording', on);
   micBtn.textContent = on ? '■' : '🎤';
-  userInput.placeholder = on ? '正在聆听，请说话…' : '输入你想说的话...';
+  userInput.placeholder = on ? '正在聆听（停顿5秒自动结束，点 ■ 手动结束）' : '输入你想说的话...';
 }
 
 function startRecording() {
+  // 新会话从输入框现有内容继续追加，不覆盖用户已输入/已识别的文字
+  asrFinalTranscript = userInput.value || '';
+  asrManualStop = false;
+  asrRestarts = 0;
+  asrLastSpeechAt = Date.now();
+
   recognition = new SpeechRecognition();
   recognition.lang = 'zh-CN';
   recognition.interimResults = true;
-  recognition.continuous = false;
+  recognition.continuous = true; // 一直听，直到手动停 / 停顿超时 / 浏览器中断
 
-  let finalTranscript = '';
   recognition.onresult = (e) => {
     let interim = '';
     for (let i = e.resultIndex; i < e.results.length; i++) {
-      if (e.results[i].isFinal) finalTranscript += e.results[i][0].transcript;
+      if (e.results[i].isFinal) asrFinalTranscript += e.results[i][0].transcript;
       else interim += e.results[i][0].transcript;
     }
-    userInput.value = finalTranscript + interim;
+    asrLastSpeechAt = Date.now(); // 只要有语音（含中间结果）就重置停顿计时
+    userInput.value = asrFinalTranscript + interim;
   };
-  recognition.onend = () => setRecordingState(false);
+
+  recognition.onend = () => {
+    if (!recording) return;
+    if (asrManualStop || asrRestarts >= ASR_MAX_RESTARTS) {
+      setRecordingState(false);
+      clearInterval(asrWatchdog);
+      return;
+    }
+    // 连续模式仍可能被浏览器偶发切断：自动重连，保持"一直讲"
+    asrRestarts++;
+    try { recognition.start(); } catch { setRecordingState(false); }
+  };
+
   recognition.onerror = (e) => {
     setRecordingState(false);
+    clearInterval(asrWatchdog);
     console.warn('[ASR] 语音识别错误:', e.error);
     if (e.error === 'not-allowed' || e.error === 'service-not-allowed') {
       addSystemNote('麦克风权限被拒绝了，请在浏览器设置中允许后重试。');
@@ -627,8 +654,18 @@ function startRecording() {
     }
   };
 
+  // 停顿看门狗：超过阈值无语音则自动结束（等同手动结束路径）
+  clearInterval(asrWatchdog);
+  asrWatchdog = setInterval(() => {
+    if (!recording) { clearInterval(asrWatchdog); return; }
+    if (Date.now() - asrLastSpeechAt > ASR_SILENCE_TIMEOUT) {
+      asrManualStop = true;
+      if (recognition) recognition.stop();
+    }
+  }, 500);
+
   setRecordingState(true);
-  recognition.start();
+  try { recognition.start(); } catch (err) { setRecordingState(false); }
 }
 
 if (micBtn) {
@@ -638,6 +675,7 @@ if (micBtn) {
   } else {
     micBtn.addEventListener('click', () => {
       if (recording) {
+        asrManualStop = true;
         recognition && recognition.stop();
       } else {
         try { startRecording(); } catch (err) { setRecordingState(false); }
