@@ -25,9 +25,7 @@ function overview(days) {
   const sessions = db.prepare('SELECT COUNT(*) n FROM conversations WHERE started_at >= ?').get(from).n;
   const activeSessions = db.prepare(
     'SELECT COUNT(DISTINCT conv_id) n FROM messages WHERE created_at >= ?').get(from).n;
-  const messages = db.prepare(`
-    SELECT COUNT(*) n FROM messages m JOIN conversations c ON c.id = m.conv_id
-    WHERE c.started_at >= ?`).get(from).n;
+  const messages = db.prepare('SELECT COUNT(*) n FROM messages WHERE created_at >= ?').get(from).n;
   const users = db.prepare('SELECT COUNT(DISTINCT user_id) n FROM conversations WHERE user_id IS NOT NULL AND started_at >= ?').get(from).n;
   const completed = db.prepare(`
     SELECT COUNT(DISTINCT c.id) n FROM conversations c
