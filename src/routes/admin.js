@@ -99,7 +99,7 @@ function renderDashboard() {
     <div class="card"><h3>今日</h3>
       <div class="kpi">${today.activeSessions}</div><div class="dim">活跃会话（有消息）</div>
       <div class="dim">新建会话 ${today.sessions} · 消息 ${today.messages}</div>
-      <div class="dim">登录用户 ${today.users}</div></div>
+      <div class="dim">活跃登录用户 ${today.activeUsers}</div></div>
     <div class="card"><h3>近 7 天</h3>
       <div class="kpi">${w7.activeSessions}</div><div class="dim">活跃会话</div>
       <div class="dim">新建 ${w7.sessions}</div>
@@ -111,7 +111,7 @@ function renderDashboard() {
       <div class="dim">新建 ${d30.sessions}</div>
       <div class="dim">完聊率 ${rateCell(d30.completionRate, 50)}</div>
       <div class="dim">有效疏导 ${rateCell(d30.effectiveRate, 60)}</div>
-      <div class="dim">登录用户 ${d30.users}</div></div>
+      <div class="dim">活跃登录用户 ${d30.activeUsers}</div></div>
     <div class="card"><h3>红线（30 天）</h3>
       <div class="dim">👎 率 ${rateCell(d30.downRate, 15, false)}（bot 消息 ${d30.botMsgs} 条）</div>
       <div class="dim" style="margin-top:8px">LLM 成功率 / 危机漏检见周报（journalctl）</div></div>

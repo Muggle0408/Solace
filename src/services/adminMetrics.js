@@ -27,6 +27,9 @@ function overview(days) {
     'SELECT COUNT(DISTINCT conv_id) n FROM messages WHERE created_at >= ?').get(from).n;
   const messages = db.prepare('SELECT COUNT(*) n FROM messages WHERE created_at >= ?').get(from).n;
   const users = db.prepare('SELECT COUNT(DISTINCT user_id) n FROM conversations WHERE user_id IS NOT NULL AND started_at >= ?').get(from).n;
+  const activeUsers = db.prepare(`
+    SELECT COUNT(DISTINCT c.user_id) n FROM messages m JOIN conversations c ON c.id = m.conv_id
+    WHERE m.created_at >= ? AND c.user_id IS NOT NULL`).get(from).n;
   const completed = db.prepare(`
     SELECT COUNT(DISTINCT c.id) n FROM conversations c
     WHERE c.started_at >= ? AND EXISTS (SELECT 1 FROM messages m WHERE m.conv_id=c.id AND m.stage IN ('closing','rating'))`).get(from).n;
@@ -48,7 +51,7 @@ function overview(days) {
 
   const r = (a, b) => (b ? Math.round((a / b) * 1000) / 10 : null);
   return {
-    sessions, activeSessions, messages, users,
+    sessions, activeSessions, messages, users, activeUsers,
     completionRate: r(completed, sessions),
     feedbackRate: r(voted, sessions),
     downRate: r(downs, botMsgs),
