@@ -11,10 +11,8 @@ function weekBounds(date = new Date()) {
   const day = (d.getDay() + 6) % 7; // 周一=0
   const monday = new Date(d.getFullYear(), d.getMonth(), d.getDate() - day);
   const nextMonday = new Date(monday.getTime() + 7 * 86400 * 1000);
-  const fmt = (x) => {
-    const p = (n) => String(n).padStart(2, '0');
-    return `${x.getFullYear()}-${p(x.getMonth() + 1)}-${p(x.getDate())} 00:00:00`;
-  };
+  // 本地零点 → UTC 字符串（SQLite datetime('now') 存 UTC，避免 8 小时错位）
+  const fmt = (x) => `${x.toISOString().slice(0, 10)} ${x.toISOString().slice(11, 16)}`;
   return { from: fmt(monday), to: fmt(nextMonday) };
 }
 

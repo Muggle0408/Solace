@@ -1,10 +1,23 @@
 // 实时看板查询：全部直查现有表（零新表），每次请求即当前数据
+// 注意：SQLite datetime('now') 存的是 UTC 字符串；本文件所有边界统一换算为 UTC，避免 8 小时错位
 const db = require('./db');
 
+// 本地零点换算为 UTC 字符串（与库内 UTC 存储对齐）
+function localMidnightUtc(daysAgo = 0) {
+  const d = new Date();
+  d.setHours(0, 0, 0, 0);
+  d.setDate(d.getDate() - daysAgo);
+  return d.toISOString().slice(0, 16).replace('T', ' ');
+}
+
 function since(days) {
-  const d = new Date(Date.now() - days * 86400 * 1000);
-  const p = (n) => String(n).padStart(2, '0');
-  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} 00:00:00`;
+  // 近 N 个本地自然日：从今天零点往前推 N-1 天
+  return localMidnightUtc(days - 1);
+}
+
+// UTC 字符串 → 本地日期键 'YYYY-MM-DD'
+function localDateKey(utcStr) {
+  return new Date(String(utcStr).replace(' ', 'T') + 'Z').toLocaleDateString('sv');
 }
 
 function overview(days) {
@@ -44,21 +57,25 @@ function overview(days) {
   };
 }
 
-// 近 N 天每日趋势（会话数 + 👎 数，按日对齐补零）
+// 近 N 个本地自然日趋势（会话数 + 👎 数），按本地日期分桶补零
 function dailyTrend(days = 14) {
   const from = since(days);
-  const sessions = db.prepare(`
-    SELECT date(started_at) d, COUNT(*) n FROM conversations
-    WHERE started_at >= ? GROUP BY date(started_at)`).all(from);
-  const downs = db.prepare(`
-    SELECT date(m.created_at) d, COUNT(*) n FROM messages m
-    WHERE m.vote='down' AND m.created_at >= ? GROUP BY date(m.created_at)`).all(from);
-  const mapS = Object.fromEntries(sessions.map((x) => [x.d, x.n]));
-  const mapD = Object.fromEntries(downs.map((x) => [x.d, x.n]));
+  const mapS = {};
+  for (const r of db.prepare('SELECT started_at FROM conversations WHERE started_at >= ?').all(from)) {
+    const k = localDateKey(r.started_at);
+    mapS[k] = (mapS[k] || 0) + 1;
+  }
+  const mapD = {};
+  for (const r of db.prepare("SELECT created_at FROM messages WHERE vote='down' AND created_at >= ?").all(from)) {
+    const k = localDateKey(r.created_at);
+    mapD[k] = (mapD[k] || 0) + 1;
+  }
   const out = [];
   for (let i = days - 1; i >= 0; i--) {
-    const dt = new Date(Date.now() - i * 86400 * 1000);
-    const key = dt.toISOString().slice(0, 10);
+    const dt = new Date();
+    dt.setHours(0, 0, 0, 0);
+    dt.setDate(dt.getDate() - i);
+    const key = dt.toLocaleDateString('sv');
     out.push({ date: key.slice(5), sessions: mapS[key] || 0, downs: mapD[key] || 0 });
   }
   return out;
@@ -81,4 +98,4 @@ function recentDowns(limit = 10) {
     WHERE m.role='bot' AND m.vote='down' ORDER BY m.created_at DESC LIMIT ?`).all(limit);
 }
 
-module.exports = { overview, dailyTrend, stageDistribution, recentDowns };
+module.exports = { overview, dailyTrend, stageDistribution, recentDowns, since, localDateKey };
