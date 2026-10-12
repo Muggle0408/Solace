@@ -97,16 +97,18 @@ function renderDashboard() {
 
   <div class="grid">
     <div class="card"><h3>今日</h3>
-      <div class="kpi">${today.sessions}</div><div class="dim">会话</div>
-      <div class="kpi">${today.messages}</div><div class="dim">消息</div>
+      <div class="kpi">${today.activeSessions}</div><div class="dim">活跃会话（有消息）</div>
+      <div class="dim">新建会话 ${today.sessions} · 消息 ${today.messages}</div>
       <div class="dim">登录用户 ${today.users}</div></div>
     <div class="card"><h3>近 7 天</h3>
-      <div class="kpi">${w7.sessions}</div><div class="dim">会话</div>
+      <div class="kpi">${w7.activeSessions}</div><div class="dim">活跃会话</div>
+      <div class="dim">新建 ${w7.sessions}</div>
       <div class="dim">完聊率 ${rateCell(w7.completionRate, 50)}</div>
       <div class="dim">反馈参与 ${rateCell(w7.feedbackRate, 15)}</div>
       <div class="dim">👎 率 ${rateCell(w7.downRate, 15, false)}</div></div>
     <div class="card"><h3>近 30 天</h3>
-      <div class="kpi">${d30.sessions}</div><div class="dim">会话</div>
+      <div class="kpi">${d30.activeSessions}</div><div class="dim">活跃会话</div>
+      <div class="dim">新建 ${d30.sessions}</div>
       <div class="dim">完聊率 ${rateCell(d30.completionRate, 50)}</div>
       <div class="dim">有效疏导 ${rateCell(d30.effectiveRate, 60)}</div>
       <div class="dim">登录用户 ${d30.users}</div></div>
@@ -116,7 +118,7 @@ function renderDashboard() {
   </div>
 
   <div class="row2">
-    <div class="card"><h3>近 14 天趋势（绿=会话数，红=👎 数）</h3>
+    <div class="card"><h3>近 14 天趋势（绿=当日活跃会话，红=👎 数）</h3>
       <div class="chart">${trendBars}</div></div>
     <div class="card"><h3>阶段分布（30 天 bot 消息）</h3>${stageRows}</div>
   </div>

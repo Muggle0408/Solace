@@ -23,6 +23,8 @@ function localDateKey(utcStr) {
 function overview(days) {
   const from = since(days);
   const sessions = db.prepare('SELECT COUNT(*) n FROM conversations WHERE started_at >= ?').get(from).n;
+  const activeSessions = db.prepare(
+    'SELECT COUNT(DISTINCT conv_id) n FROM messages WHERE created_at >= ?').get(from).n;
   const messages = db.prepare(`
     SELECT COUNT(*) n FROM messages m JOIN conversations c ON c.id = m.conv_id
     WHERE c.started_at >= ?`).get(from).n;
@@ -48,7 +50,7 @@ function overview(days) {
 
   const r = (a, b) => (b ? Math.round((a / b) * 1000) / 10 : null);
   return {
-    sessions, messages, users,
+    sessions, activeSessions, messages, users,
     completionRate: r(completed, sessions),
     feedbackRate: r(voted, sessions),
     downRate: r(downs, botMsgs),
@@ -61,10 +63,11 @@ function overview(days) {
 function dailyTrend(days = 14) {
   const from = since(days);
   const mapS = {};
-  for (const r of db.prepare('SELECT started_at FROM conversations WHERE started_at >= ?').all(from)) {
-    const k = localDateKey(r.started_at);
-    mapS[k] = (mapS[k] || 0) + 1;
+  for (const r of db.prepare('SELECT created_at, conv_id FROM messages WHERE created_at >= ?').all(from)) {
+    const k = localDateKey(r.created_at);
+    (mapS[k] = mapS[k] || new Set()).add(r.conv_id);
   }
+  for (const k of Object.keys(mapS)) mapS[k] = mapS[k].size;
   const mapD = {};
   for (const r of db.prepare("SELECT created_at FROM messages WHERE vote='down' AND created_at >= ?").all(from)) {
     const k = localDateKey(r.created_at);
