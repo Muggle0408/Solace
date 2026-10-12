@@ -436,8 +436,11 @@ describe('V1 周报指标', () => {
   it('周窗口与指标计算：会话/完聊/反馈口径正确', () => {
     const { weekBounds, computeMetrics, ratio } = require('../src/services/weeklyMetrics');
     const wb = weekBounds(new Date('2026-10-07T12:00:00'));
-    assert.ok(wb.from.startsWith('2026-10-05')); // 周一
-    assert.ok(wb.to.startsWith('2026-10-12'));
+    // 本地周一零点换算为 UTC 字符串（与库内 UTC 存储对齐）
+    const expFrom = new Date(2026, 9, 5).toISOString().slice(0, 16).replace('T', ' ');
+    const expTo = new Date(2026, 9, 12).toISOString().slice(0, 16).replace('T', ' ');
+    assert.strictEqual(wb.from, expFrom);
+    assert.strictEqual(wb.to, expTo);
 
     // 造数据：一次完聊(含 closing 消息+双评分改善≥2)、一次未完聊
     const db = require('../src/services/db');
