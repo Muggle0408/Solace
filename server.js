@@ -47,6 +47,7 @@ app.use('/api', require('./src/routes/conversations'));
 app.use('/api', chatRoutes);
 app.use('/api', require('./src/routes/feedback'));
 app.use('/api', require('./src/routes/tts'));
+app.use(require('./src/routes/admin'));
 
 module.exports = { app };
 

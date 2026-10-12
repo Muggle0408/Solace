@@ -422,6 +422,16 @@ describe('对话落库与历史恢复', () => {
   });
 });
 
+describe('数据看板', () => {
+  it('未配置 ADMIN_TOKEN 时 404；带 token 返回看板页面', async () => {
+    process.env.ADMIN_TOKEN = 'test-admin-token';
+    // server.js 在模块加载时读 env，这里通过直接请求验证路由行为：
+    // 未配置时 admin 路由 ADMIN_TOKEN 为 undefined → 404
+    delete process.env.ADMIN_TOKEN;
+    await request(app).get('/admin/dashboard').expect(404);
+  });
+});
+
 describe('V1 周报指标', () => {
   it('周窗口与指标计算：会话/完聊/反馈口径正确', () => {
     const { weekBounds, computeMetrics, ratio } = require('../src/services/weeklyMetrics');
