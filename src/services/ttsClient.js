@@ -91,6 +91,76 @@ async function minimaxSynthesize(text) {
   return Buffer.from(audio, 'hex');
 }
 
+// ---------- 流式合成：逐帧回调音频数据，首帧到达即返回（抢首音）----------
+// 豆包 V3 为逐行 chunked JSON（首包 code=0、结束包 code=20000000，data 为 base64 音频帧）
+async function volcSynthesizeStream(text, onFrame) {
+  const started = Date.now();
+  let firstFrameMs = null;
+  let bytes = 0;
+  let res;
+  try {
+    res = await axios.post(
+      'https://openspeech.bytedance.com/api/v3/tts/unidirectional',
+      {
+        req_params: {
+          text,
+          speaker: VOLC_VOICE,
+          audio_params: { format: 'mp3', sample_rate: 24000, speech_rate: VOLC_SPEECH_RATE }
+        }
+      },
+      {
+        headers: {
+          'X-Api-Key': VOLC_API_KEY,
+          'X-Api-Resource-Id': VOLC_RESOURCE,
+          'X-Api-Request-Id': crypto.randomUUID(),
+          'Content-Type': 'application/json'
+        },
+        timeout: 20000,
+        responseType: 'stream'
+      }
+    );
+  } catch (err) {
+    if (err.response?.status) throw new Error(`豆包TTS请求失败(${err.response.status})`);
+    throw err;
+  }
+
+  await new Promise((resolve, reject) => {
+    let leftover = '';
+    const handleLine = (line) => {
+      let p;
+      try { p = JSON.parse(line); } catch { return; } // 非完整 JSON 行直接忽略
+      if (p.code !== 0 && p.code !== 20000000) {
+        reject(new Error(`豆包TTS错误(${p.code}): ${p.message}`));
+        return;
+      }
+      if (p.data) {
+        const buf = Buffer.from(p.data, 'base64');
+        if (firstFrameMs === null) firstFrameMs = Date.now() - started;
+        bytes += buf.length;
+        onFrame(buf);
+      }
+    };
+    res.data.on('data', (chunk) => {
+      leftover += chunk.toString('utf8');
+      let idx;
+      while ((idx = leftover.indexOf('\n')) >= 0) {
+        const line = leftover.slice(0, idx).trim();
+        leftover = leftover.slice(idx + 1);
+        if (line) handleLine(line);
+      }
+    });
+    res.data.on('end', () => {
+      const tail = leftover.trim();
+      if (tail) handleLine(tail); // 单 JSON 无换行响应
+      resolve();
+    });
+    res.data.on('error', reject);
+  });
+
+  if (!bytes) throw new Error('豆包TTS 返回空音频');
+  return { firstFrameMs, totalMs: Date.now() - started, bytes };
+}
+
 // ---------- 统一入口 ----------
 function isConfigured() {
   if (PROVIDER === 'minimax') return Boolean(MINIMAX_KEY);
@@ -103,4 +173,16 @@ async function synthesize(text) {
   return volcSynthesize(text);
 }
 
-module.exports = { synthesize, isConfigured, PROVIDER };
+// 流式入口：volc 原生逐帧；minimax（stream:false）整段合成后一次性回调，接口形态保持一致
+async function synthesizeStream(text, onFrame) {
+  if (!isConfigured()) throw new Error('TTS 未配置 Key');
+  if (PROVIDER === 'minimax') {
+    const started = Date.now();
+    const buf = await minimaxSynthesize(text);
+    onFrame(buf);
+    return { firstFrameMs: Date.now() - started, totalMs: Date.now() - started, bytes: buf.length };
+  }
+  return volcSynthesizeStream(text, onFrame);
+}
+
+module.exports = { synthesize, synthesizeStream, isConfigured, PROVIDER };

@@ -231,6 +231,19 @@ describe('语音合成', () => {
     await request(app).post('/api/tts').send({ text: '' }).expect(400);
     await request(app).post('/api/tts').send({ text: '长'.repeat(501) }).expect(400);
   });
+
+  it('未配置 Key 时流式 TTS 返回 501（前端降级缓冲接口）', async () => {
+    const res = await request(app)
+      .get('/api/tts/stream')
+      .query({ text: '你好' })
+      .expect(501);
+    assert.strictEqual(res.body.error, 'TTS_NOT_CONFIGURED');
+  });
+
+  it('流式 TTS 同样拒绝空文本或过长文本', async () => {
+    await request(app).get('/api/tts/stream').query({ text: '' }).expect(400);
+    await request(app).get('/api/tts/stream').query({ text: '长'.repeat(501) }).expect(400);
+  });
 });
 
 describe('账号系统（多通道验证码）', () => {

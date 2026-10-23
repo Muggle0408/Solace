@@ -215,16 +215,21 @@ function createStreamingBubble() {
   };
 }
 
-// 播报流水线：句子合并成 ~60 字段落；播放当前段时，后面 2 段已在后台合成（无缝衔接）
-let ttsChunkQueue = [];       // 待播队列：{ text, seq, fetching, blob }
+// 播报流水线：首段低阈值抢首音，后续 ~60字/3句保连贯；播放当前段时，后面 2 段已在后台合成（无缝衔接）
+let ttsChunkQueue = [];       // 待播队列：{ text, seq, fetching, blob, first }
 let ttsPlaying = false;
 let streamSentCount = 0;      // 已消费到第几句
 let chunkBuf = '';            // 凑段缓冲区
 let chunkSents = 0;           // 当前段已含几句
 let enqueuedText = '';        // (已废弃) 旧覆盖核对所用，现保留仅占位
+let firstChunkPending = true; // 本回复首段未出：用低阈值尽早触发首音
+let ttsReplyStartMs = 0;      // 用户发送时刻：首音延迟测量基准（验收 <1.5s）
+let firstAudioLogged = false;
 const CHUNK_MAX_CHARS = 60;
 const CHUNK_MAX_SENTS = 3;
-const PRELOAD_AHEAD = 2;      // 除当前播放外，提前合成几段
+const CHUNK_FIRST_CHARS = 20; // 首段：一句即播，尽快开声
+const CHUNK_FIRST_SENTS = 1;
+const PRELOAD_AHEAD = 2;      // 除当前播放外，提前合成几段（首段除外：它自己边下边播）
 
 function resetStreamTts() {
   finalizeStream.done = false;
@@ -232,6 +237,9 @@ function resetStreamTts() {
   chunkBuf = '';
   chunkSents = 0;
   enqueuedText = '';
+  firstChunkPending = true;
+  ttsReplyStartMs = Date.now();
+  firstAudioLogged = false;
 }
 
 //  invisible 字符清洗（模型输出句尾可能带零宽空格，会让切句器误判"最后一句不完整"）
@@ -245,13 +253,15 @@ function feedStreamTts(fullText) {
   if (!ttsAuto) return;
   const parts = cleanTtsText(fullText).split(/(?<=[。！？!?；;\n])/);
   const usable = parts.slice(0, -1); // 末段（可能未完成）本轮不消费
+  const maxChars = firstChunkPending ? CHUNK_FIRST_CHARS : CHUNK_MAX_CHARS;
+  const maxSents = firstChunkPending ? CHUNK_FIRST_SENTS : CHUNK_MAX_SENTS;
   for (let i = streamSentCount; i < usable.length; i++) {
     streamSentCount = i + 1;
     const seg = usable[i].trim();
     if (!seg) continue; // \n 碎片等空段：只推进计数
     chunkBuf += seg;
     chunkSents++;
-    if (chunkBuf.length >= CHUNK_MAX_CHARS || chunkSents >= CHUNK_MAX_SENTS) flushChunk();
+    if (chunkBuf.length >= maxChars || chunkSents >= maxSents) flushChunk();
   }
 }
 
@@ -262,7 +272,8 @@ function flushStreamTts() {
 
 function flushChunk() {
   if (!chunkBuf) return;
-  ttsChunkQueue.push({ text: chunkBuf, seq: speakSeq, fetching: null, blob: null });
+  ttsChunkQueue.push({ text: chunkBuf, seq: speakSeq, fetching: null, blob: null, first: firstChunkPending });
+  firstChunkPending = false;
   enqueuedText += chunkBuf;
   chunkBuf = '';
   chunkSents = 0;
@@ -271,7 +282,7 @@ function flushChunk() {
 
 // 维持「前方 PRELOAD_AHEAD 段已发起合成」的不变量，并驱动播放
 function kickPipeline() {
-  const pending = ttsChunkQueue.filter((it) => !it.blob && !it.fetching).slice(0, PRELOAD_AHEAD);
+  const pending = ttsChunkQueue.filter((it) => !it.first && !it.blob && !it.fetching).slice(0, PRELOAD_AHEAD);
   for (const it of pending) {
     it.fetching = fetchChunkAudio(it.text).then((b) => { it.blob = b; });
   }
@@ -287,12 +298,14 @@ async function playNextChunk() {
       ttsChunkQueue.length = 0;
       return;
     }
-    if (!item.fetching) item.fetching = fetchChunkAudio(item.text).then((b) => { item.blob = b; });
-    await item.fetching;
     ttsChunkQueue.shift();
     kickPipeline(); // 播放期间继续预取后续段
-    if (item.blob && item.seq === speakSeq) {
-      await playChunkAudio(item.blob, item.seq);
+    if (item.first) {
+      await playChunkStream(item.text, item.seq); // 首段：边下边播抢首音
+    } else {
+      if (!item.fetching) item.fetching = fetchChunkAudio(item.text).then((b) => { item.blob = b; });
+      await item.fetching;
+      if (item.blob && item.seq === speakSeq) await playChunkAudio(item.blob, item.seq);
     }
   } catch { /* 单段失败跳到下一段 */ }
   ttsPlaying = false;
@@ -319,7 +332,10 @@ function playChunkAudio(blob, seq) {
   return new Promise((resolve) => {
     const url = URL.createObjectURL(blob);
     const audio = new Audio(url);
+    let settled = false;
     const done = () => {
+      if (settled) return;
+      settled = true;
       URL.revokeObjectURL(url);
       if (currentAudio === audio) currentAudio = null;
       if (currentAudioUrl === url) currentAudioUrl = null;
@@ -327,10 +343,53 @@ function playChunkAudio(blob, seq) {
     };
     audio.onended = done;
     audio.onerror = done;
+    audio.onpause = () => { if (!audio.ended) done(); }; // 被停止时释放播放链，防流水线卡死
     currentAudio = audio;
     currentAudioUrl = url;
     if (seq !== speakSeq) { done(); return; } // 已被停止
     audio.play().catch(done);
+  });
+}
+
+// 首段播报：audio 直连流式接口，服务端首帧即推，边下边播（等整段合成会拖慢首音）
+function playChunkStream(text, seq) {
+  return new Promise((resolve) => {
+    let settled = false;
+    let guard = null;
+    const audio = new Audio('/api/tts/stream?text=' + encodeURIComponent(text));
+    const cleanup = () => {
+      clearTimeout(guard);
+      audio.onended = audio.onerror = audio.onpause = audio.onplaying = null;
+      if (currentAudio === audio) currentAudio = null;
+    };
+    const finish = () => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      resolve();
+    };
+    const fallback = async () => {
+      if (settled) return;
+      settled = true;
+      cleanup();
+      audio.removeAttribute('src'); // 停止无效下载
+      const blob = await fetchChunkAudio(text); // 降级：整段缓冲合成
+      if (seq === speakSeq && blob) await playChunkAudio(blob, seq);
+      resolve();
+    };
+    audio.onended = finish;
+    audio.onerror = fallback;
+    audio.onpause = () => { if (!audio.ended) finish(); }; // 被停止/打断：释放播放链
+    audio.onplaying = () => {
+      if (!firstAudioLogged) {
+        firstAudioLogged = true;
+        console.log('[播报] 首音 ' + (Date.now() - ttsReplyStartMs) + 'ms（用户发送→出声，验收<1.5s）');
+      }
+    };
+    guard = setTimeout(fallback, 15000); // 网络挂死兜底
+    currentAudio = audio;
+    if (seq !== speakSeq) { finish(); return; } // 已被停止
+    audio.play().catch(fallback);
   });
 }
 
