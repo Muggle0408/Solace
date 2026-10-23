@@ -1,7 +1,7 @@
 // 实时数据看板：GET /admin/dashboard?token=<ADMIN_TOKEN>
 // 零新表直查 SQLite；token 经环境变量 ADMIN_TOKEN 配置（未配置则看板不启用，返回 404）
 const express = require('express');
-const { overview, dailyTrend, stageDistribution, recentDowns } = require('../services/adminMetrics');
+const { overview, dailyTrend, stageDistribution, recentDowns, recentUps } = require('../services/adminMetrics');
 
 const router = express.Router();
 const ADMIN_TOKEN = process.env.ADMIN_TOKEN;
@@ -32,6 +32,7 @@ function renderDashboard() {
   const trend = dailyTrend(14);
   const stages = stageDistribution(30);
   const downs = recentDowns(10);
+  const ups = recentUps(10);
   const maxSessions = Math.max(1, ...trend.map((t) => t.sessions));
   const maxStage = Math.max(1, ...stages.map((s) => s.n));
 
@@ -57,6 +58,15 @@ function renderDashboard() {
       <td>${esc(d.email || d.phone || '游客')}</td>
       <td class="clip">${esc(String(d.content).slice(0, 60))}</td>
     </tr>`).join('') : '<tr><td colspan="5" class="dim">近 30 天无 👎 反馈</td></tr>';
+
+  const upRows = ups.length ? ups.map((d) => `
+    <tr>
+      <td class="dim">${esc(d.created_at)}</td>
+      <td>${esc(d.stage || '—')}</td>
+      <td>${esc(d.vote_reason || '—')}</td>
+      <td>${esc(d.email || d.phone || '游客')}</td>
+      <td class="clip" title="${esc(d.content)}">${esc(String(d.content).slice(0, 60))}</td>
+    </tr>`).join('') : '<tr><td colspan="5" class="dim">暂无 👍 正反馈</td></tr>';
 
   return `<!DOCTYPE html>
 <html lang="zh-CN">
@@ -125,6 +135,9 @@ function renderDashboard() {
 
   <div class="card" style="margin-top:14px"><h3>最新 👎 反馈（10 条）</h3>
     <table><tr><th>时间</th><th>阶段</th><th>原因</th><th>用户</th><th>回复摘录</th></tr>${downRows}</table></div>
+
+  <div class="card" style="margin-top:14px"><h3>👍 正反馈 Goodcase（10 条，供参考的优秀回复）</h3>
+    <table><tr><th>时间</th><th>阶段</th><th>标签</th><th>用户</th><th>回复摘录</th></tr>${upRows}</table></div>
 </body>
 </html>`;
 }

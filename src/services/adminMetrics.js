@@ -102,4 +102,12 @@ function recentDowns(limit = 10) {
     WHERE m.role='bot' AND m.vote='down' ORDER BY m.created_at DESC LIMIT ?`).all(limit);
 }
 
-module.exports = { overview, dailyTrend, stageDistribution, recentDowns, since, localDateKey };
+// 👍 正反馈（goodcase 参考）：最近被点赞的 bot 回复
+function recentUps(limit = 10) {
+  return db.prepare(`
+    SELECT m.created_at, m.stage, m.vote_reason, m.content, c.id conv_id, u.email, u.phone
+    FROM messages m JOIN conversations c ON c.id = m.conv_id LEFT JOIN users u ON u.id = c.user_id
+    WHERE m.role='bot' AND m.vote='up' ORDER BY m.created_at DESC LIMIT ?`).all(limit);
+}
+
+module.exports = { overview, dailyTrend, stageDistribution, recentDowns, recentUps, since, localDateKey };
